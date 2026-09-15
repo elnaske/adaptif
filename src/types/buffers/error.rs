@@ -5,29 +5,29 @@ use crate::types::signals::OutputSample;
 
 use super::{BlockSize, SampleBuffer};
 
-pub struct ErrorBuffer(SampleBuffer);
-impl ErrorBuffer {
+pub struct BlockError(SampleBuffer);
+impl BlockError {
     pub fn new(block_size: BlockSize) -> Self {
         #[allow(
             clippy::unwrap_used,
             clippy::missing_panics_doc,
             reason = "BlockSize type cannot be zero"
         )]
-        ErrorBuffer(SampleBuffer::new(NonZero::new(*block_size).unwrap()))
+        BlockError(SampleBuffer::new(NonZero::new(*block_size).unwrap()))
     }
 
     pub fn push(&mut self, item: OutputSample) {
         self.0.push(*item);
     }
 }
-impl Deref for ErrorBuffer {
+impl Deref for BlockError {
     type Target = SampleBuffer;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl DerefMut for ErrorBuffer {
+impl DerefMut for BlockError {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -41,7 +41,7 @@ mod tests {
 
     #[test]
     fn error_buffer_init_to_zero() {
-        let buffer = ErrorBuffer::new(BlockSize::new(2).unwrap());
+        let buffer = BlockError::new(BlockSize::new(2).unwrap());
         assert!(all_approx_equal(buffer.iter(), [0_f64; 2].iter()));
     }
 }

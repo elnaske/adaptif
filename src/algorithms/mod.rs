@@ -1,5 +1,5 @@
 use crate::types::FilterWeights;
-use crate::types::buffers::{BlockNoiseBuffer, ErrorBuffer, NoiseBuffer};
+use crate::types::buffers::{BlockError, BlockNoiseBuffer, NoiseBuffer};
 use crate::types::signals::OutputSample;
 
 mod lms;
@@ -35,7 +35,7 @@ pub trait BlockAlgorithm {
     fn update_block(
         &self,
         weights: &mut FilterWeights,
-        error: &ErrorBuffer,
+        error: &BlockError,
         noise_ref: &BlockNoiseBuffer,
     );
 }

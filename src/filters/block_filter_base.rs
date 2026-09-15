@@ -5,7 +5,7 @@ use crate::algorithms::BlockAlgorithm;
 use crate::error::Result;
 use crate::filters::AdaptiveFilter;
 use crate::filters::common::{check_signal_lengths, compute_error};
-use crate::types::buffers::{BlockNoiseBuffer, ErrorBuffer};
+use crate::types::buffers::{BlockError, BlockNoiseBuffer};
 use crate::types::signals::{InputSignal, NoiseReference, OutputSignal};
 use crate::types::{BlockSize, FilterWeights, NoiseEstimate, WindowSize};
 
@@ -54,7 +54,7 @@ impl<B: BlockAlgorithm> BlockFilterBase<B> {
         input_signal: &InputSignal,
         noise_ref: &NoiseReference,
         noise_ref_buffer: &mut BlockNoiseBuffer,
-        block_error: &mut ErrorBuffer,
+        block_error: &mut BlockError,
         cleaned_signal: &mut OutputSignal,
     ) {
         for n in range {
@@ -99,7 +99,7 @@ impl<B: BlockAlgorithm> AdaptiveFilter for BlockFilterBase<B> {
         check_signal_lengths(input_signal, noise_ref)?;
 
         let mut noise_ref_buffer = BlockNoiseBuffer::new(&self.weights, self.block_size);
-        let mut block_error = ErrorBuffer::new(self.block_size);
+        let mut block_error = BlockError::new(self.block_size);
         let mut cleaned_signal = OutputSignal::new(input_signal);
 
         let n_samples = input_signal.len();
@@ -158,7 +158,7 @@ impl<B: BlockAlgorithm> AdaptiveFilter for BlockFilterBase<B> {
         check_signal_lengths(input_signal, noise_ref)?;
 
         let mut noise_ref_buffer = BlockNoiseBuffer::new(&self.weights, self.block_size);
-        let mut block_error = ErrorBuffer::new(self.block_size);
+        let mut block_error = BlockError::new(self.block_size);
         let mut cleaned_signal = OutputSignal::new(input_signal);
 
         let n_samples = input_signal.len();
@@ -208,7 +208,7 @@ mod tests {
         fn update_block(
             &self,
             _weights: &mut FilterWeights,
-            _error: &ErrorBuffer,
+            _error: &BlockError,
             _noise_ref: &BlockNoiseBuffer,
         ) {
             *self.call_count.borrow_mut() += 1;
