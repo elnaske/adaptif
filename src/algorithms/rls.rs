@@ -8,60 +8,6 @@ use crate::{Error, Result};
 use crate::algorithms::Algorithm;
 
 #[derive(Debug, Clone, PartialEq)]
-/// M-dimensional vector of Kalman gains, where M is the filter's window size.
-pub struct KalmanGain<F: Float>(Box<[F]>);
-impl<F: Float> KalmanGain<F> {
-    pub fn new(window_size: WindowSize) -> Self {
-        KalmanGain(vec![F::zero(); *window_size].into_boxed_slice())
-    }
-}
-impl<F: Float> Deref for KalmanGain<F> {
-    type Target = [F];
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<F: Float> DerefMut for KalmanGain<F> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-/// Inverse Correlation Matrix with shape M * M, where M is the filter's window size.
-pub struct InverseCorrMatrix<F: Float>(Box<[F]>);
-impl<F: Float> InverseCorrMatrix<F> {
-    /// Creates an M x M-dimensional Identity matrix multiplied by a positive scalar `p_init_scale`.
-    /// I.e. `p_init_scale` is the resulting value along main diagonal and all other values are initialized
-    /// to zero.
-    ///
-    /// Serves as inverse correlation matrix in RLS algorithm, where M is the filter's window size.
-    pub fn new(window_size: WindowSize, p_init_scale: F) -> Self {
-        let mut p = vec![F::zero(); (*window_size) * (*window_size)].into_boxed_slice();
-
-        for i in 0..(*window_size) {
-            if let Some(elem) = p.get_mut(i * (*window_size) + i) {
-                *elem = p_init_scale;
-            }
-        }
-        InverseCorrMatrix(p)
-    }
-}
-impl<F: Float> Deref for InverseCorrMatrix<F> {
-    type Target = [F];
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<F: Float> DerefMut for InverseCorrMatrix<F> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
 /// Recursive least squares algorithm.
 pub struct Rls<F: Float> {
     /// Forgetting factor, often referred to as `lambda`, used for weight updates.
@@ -222,6 +168,60 @@ impl<F: Float> Algorithm<F> for Rls<F> {
         }
 
         self.update_p_matrix(noise_ref);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+/// M-dimensional vector of Kalman gains, where M is the filter's window size.
+struct KalmanGain<F: Float>(Box<[F]>);
+impl<F: Float> KalmanGain<F> {
+    pub fn new(window_size: WindowSize) -> Self {
+        KalmanGain(vec![F::zero(); *window_size].into_boxed_slice())
+    }
+}
+impl<F: Float> Deref for KalmanGain<F> {
+    type Target = [F];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<F: Float> DerefMut for KalmanGain<F> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+/// Inverse Correlation Matrix with shape M * M, where M is the filter's window size.
+struct InverseCorrMatrix<F: Float>(Box<[F]>);
+impl<F: Float> InverseCorrMatrix<F> {
+    /// Creates an M x M-dimensional Identity matrix multiplied by a positive scalar `p_init_scale`.
+    /// I.e. `p_init_scale` is the resulting value along main diagonal and all other values are initialized
+    /// to zero.
+    ///
+    /// Serves as inverse correlation matrix in RLS algorithm, where M is the filter's window size.
+    pub fn new(window_size: WindowSize, p_init_scale: F) -> Self {
+        let mut p = vec![F::zero(); (*window_size) * (*window_size)].into_boxed_slice();
+
+        for i in 0..(*window_size) {
+            if let Some(elem) = p.get_mut(i * (*window_size) + i) {
+                *elem = p_init_scale;
+            }
+        }
+        InverseCorrMatrix(p)
+    }
+}
+impl<F: Float> Deref for InverseCorrMatrix<F> {
+    type Target = [F];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<F: Float> DerefMut for InverseCorrMatrix<F> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 

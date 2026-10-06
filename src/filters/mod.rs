@@ -4,10 +4,16 @@ pub use filter_base::FilterBase;
 mod block_filter_base;
 pub use block_filter_base::BlockFilterBase;
 
-mod common;
+mod lms;
+pub use lms::{BlockLmsFilter, LmsFilter};
 
-mod aliases;
-pub use aliases::{BlockLMSFilter, LMSFilter, NLMSFilter, RLSFilter};
+mod nlms;
+pub use nlms::NlmsFilter;
+
+mod rls;
+pub use rls::RlsFilter;
+
+mod common;
 
 mod traits;
 pub use traits::AdaptiveFilter;

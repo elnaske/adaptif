@@ -14,7 +14,7 @@ use crate::filters::common::{check_signal_lengths, compute_error, estimate_noise
 ///
 /// Typically, it's more convenient to use an alias like `LMSFilter` over its equivalent `FilterBase<Lms>`.
 /// As such, `FilterBase` is mainly recommended for use with custom algorithms.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FilterBase<F: Float, A: Algorithm<F>> {
     algorithm: A,
     weights: FilterWeights<F>,
@@ -27,6 +27,7 @@ impl<F: Float, A: Algorithm<F>> FilterBase<F, A> {
     /// # Errors
     ///
     /// Returns an error if `window_size == 0`.
+    // TODO: replace usize with WindowSize (?)
     pub fn new(algorithm: A, window_size: usize) -> Result<Self> {
         let window_size = WindowSize::new(window_size)?;
         let weights = FilterWeights::new(window_size);
@@ -167,10 +168,9 @@ mod tests {
 
     use crate::algorithms::Lms;
     use crate::error::Error;
-    use crate::filters::LMSFilter;
     use crate::test_utils::all_approx_equal;
 
-    fn testing_filter() -> LMSFilter<f64> {
+    fn testing_filter() -> FilterBase<f64, Lms<f64>> {
         let window_size = 3;
         let weights = [1.0, -2.0, 0.5];
 

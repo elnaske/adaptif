@@ -9,6 +9,7 @@ use crate::types::buffers::{BlockError, BlockNoiseBuffer};
 use crate::types::signals::{InputSignal, NoiseReference, OutputSignal};
 use crate::types::{BlockSize, FilterWeights, Float, NoiseEstimate, WindowSize};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct BlockFilterBase<F: Float, B: BlockAlgorithm<F>> {
     algorithm: B,
     weights: FilterWeights<F>,
@@ -224,7 +225,6 @@ mod tests {
     use super::*;
     use crate::algorithms::Lms;
     use crate::error::Error;
-    use crate::filters::BlockLMSFilter;
     use crate::test_utils::all_approx_equal;
 
     struct UpdateCallCounter {
@@ -252,7 +252,7 @@ mod tests {
         }
     }
 
-    fn testing_filter() -> BlockLMSFilter<f64> {
+    fn testing_filter() -> BlockFilterBase<f64, Lms<f64>> {
         let window_size = 3;
         let block_size = 2;
         let weights = [1.0, -2.0, 0.5];

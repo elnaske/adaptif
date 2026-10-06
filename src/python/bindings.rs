@@ -15,11 +15,7 @@ use super::macros::generate_filter_bindings;
 
 use crate::Error;
 use crate::algorithms::{Lms, Nlms, Rls};
-use crate::filters::AdaptiveFilter;
-use crate::filters::{
-    BlockLMSFilter as RustBlockLMSFilter, LMSFilter as RustLMSFilter, NLMSFilter as RustNLMSFilter,
-    RLSFilter as RustRLSFilter,
-};
+use crate::filters::{AdaptiveFilter, BlockFilterBase, FilterBase};
 use crate::types::signals::{InputSignal, NoiseReference};
 
 impl Error {
@@ -117,13 +113,13 @@ mod adaptif {
 }
 
 #[pyclass]
-pub struct LMSFilter(RustLMSFilter<f64>);
+pub struct LMSFilter(FilterBase<f64, Lms<f64>>);
 #[pymethods]
 impl LMSFilter {
     #[new]
     fn new(mu: f64, window_size: usize) -> PyResult<Self> {
         let lms = Lms::new(mu).map_err(|e| e.to_pyerr())?;
-        let filter = RustLMSFilter::new(lms, window_size).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::new(lms, window_size).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -135,7 +131,7 @@ impl LMSFilter {
 
         let weights = weights.as_array().iter().copied().collect::<Vec<f64>>();
 
-        let filter = RustLMSFilter::from_weights(lms, weights).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::from_weights(lms, weights).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -144,13 +140,13 @@ impl LMSFilter {
 generate_filter_bindings!(LMSFilter);
 
 #[pyclass]
-pub struct NLMSFilter(RustNLMSFilter<f64>);
+pub struct NLMSFilter(FilterBase<f64, Nlms<f64>>);
 #[pymethods]
 impl NLMSFilter {
     #[new]
     fn new(mu: f64, eps: f64, window_size: usize) -> PyResult<Self> {
         let nlms = Nlms::new(mu, eps).map_err(|e| e.to_pyerr())?;
-        let filter = RustNLMSFilter::new(nlms, window_size).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::new(nlms, window_size).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -161,7 +157,7 @@ impl NLMSFilter {
 
         let weights = weights.as_array().iter().copied().collect::<Vec<f64>>();
 
-        let filter = RustNLMSFilter::from_weights(nlms, weights).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::from_weights(nlms, weights).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -170,13 +166,13 @@ impl NLMSFilter {
 generate_filter_bindings!(NLMSFilter);
 
 #[pyclass]
-pub struct RLSFilter(RustRLSFilter<f64>);
+pub struct RLSFilter(FilterBase<f64, Rls<f64>>);
 #[pymethods]
 impl RLSFilter {
     #[new]
     fn new(forgetting_factor: f64, p_init_scale: f64, window_size: usize) -> PyResult<Self> {
         let rls = Rls::new(forgetting_factor, p_init_scale).map_err(|e| e.to_pyerr())?;
-        let filter = RustRLSFilter::new(rls, window_size).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::new(rls, window_size).map_err(|e| e.to_pyerr())?;
         Ok(Self(filter))
     }
     #[staticmethod]
@@ -189,7 +185,7 @@ impl RLSFilter {
 
         let weights = weights.as_array().iter().copied().collect::<Vec<f64>>();
 
-        let filter = RustRLSFilter::from_weights(rls, weights).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::from_weights(rls, weights).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -198,14 +194,14 @@ impl RLSFilter {
 generate_filter_bindings!(RLSFilter);
 
 #[pyclass]
-pub struct BlockLMSFilter(RustBlockLMSFilter<f64>);
+pub struct BlockLMSFilter(BlockFilterBase<f64, Lms<f64>>);
 #[pymethods]
 impl BlockLMSFilter {
     #[new]
     fn new(mu: f64, window_size: usize, block_size: usize) -> PyResult<Self> {
         let lms = Lms::new(mu).map_err(|e| e.to_pyerr())?;
         let filter =
-            RustBlockLMSFilter::new(lms, window_size, block_size).map_err(|e| e.to_pyerr())?;
+            BlockFilterBase::new(lms, window_size, block_size).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -217,7 +213,7 @@ impl BlockLMSFilter {
         let weights = weights.as_array().iter().copied().collect::<Vec<f64>>();
 
         let filter =
-            RustBlockLMSFilter::from_weights(lms, weights, block_size).map_err(|e| e.to_pyerr())?;
+            BlockFilterBase::from_weights(lms, weights, block_size).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
