@@ -146,7 +146,7 @@ impl<F: Float> SampleAlgorithm<F> for Rls<F> {
     /// where `e_n` is the scalar error for the current sample,
     /// and $``x_n``$ is a vector of length `window_size` of the
     /// most recent noise reference samples.
-    fn update_step(
+    fn update_sample(
         &mut self,
         weights: &mut FilterWeights<F>,
         error: OutputSample<F>,
@@ -285,7 +285,7 @@ mod tests {
         let expected = [0.8, -0.8];
         let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
 
-        rls.update_step(&mut weights, e_n, &x_n);
+        rls.update_sample(&mut weights, e_n, &x_n);
 
         assert!(all_approx_equal(weights.iter(), expected.iter()));
     }
@@ -298,7 +298,7 @@ mod tests {
         let expected = [5.0 / 30.0, 2.0 / 30.0];
         let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
 
-        rls.update_step(&mut weights, e_n, &x_n);
+        rls.update_sample(&mut weights, e_n, &x_n);
 
         assert!(all_approx_equal(weights.iter(), expected.iter()));
     }

@@ -37,7 +37,7 @@ impl<F: Float> SampleAlgorithm<F> for Nlms<F> {
     /// where $``e_n``$ is the scalar error for the current sample,
     /// and $``x_n``$ is a vector of length `window_size` of the
     /// most recent noise reference samples.
-    fn update_step(
+    fn update_sample(
         &mut self,
         weights: &mut FilterWeights<F>,
         error: OutputSample<F>,
@@ -69,7 +69,7 @@ mod tests {
         let expected = [1.0 / (2.0 + nlms.eps), -1.0 / (2.0 + nlms.eps)];
         let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
 
-        nlms.update_step(&mut weights, e_n, &x_n);
+        nlms.update_sample(&mut weights, e_n, &x_n);
 
         assert!(all_approx_equal(weights.iter(), expected.iter()));
     }
@@ -82,7 +82,7 @@ mod tests {
         let expected = [(5.0 / (29.0 + nlms.eps)), (2.0 / (29.0 + nlms.eps))];
         let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
 
-        nlms.update_step(&mut weights, e_n, &x_n);
+        nlms.update_sample(&mut weights, e_n, &x_n);
 
         assert!(all_approx_equal(weights.iter(), expected.iter()));
     }

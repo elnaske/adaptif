@@ -113,13 +113,13 @@ mod adaptif {
 }
 
 #[pyclass]
-pub struct LMSFilter(SampleFilterBase<f64, Lms<f64>>);
+pub struct LMSFilter(FilterBase<f64, Lms<f64>>);
 #[pymethods]
 impl LMSFilter {
     #[new]
     fn new(mu: f64, window_size: usize) -> PyResult<Self> {
         let lms = Lms::new(mu).map_err(|e| e.to_pyerr())?;
-        let filter = SampleFilterBase::new(lms, window_size).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::new(lms, window_size, 1).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -131,7 +131,7 @@ impl LMSFilter {
 
         let weights = weights.as_array().iter().copied().collect::<Vec<f64>>();
 
-        let filter = SampleFilterBase::from_weights(lms, weights).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::from_weights(lms, weights, 1).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }

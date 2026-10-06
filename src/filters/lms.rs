@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use super::{FilterBase, SampleFilterBase};
+use super::FilterBase;
 
 use crate::Result;
 use crate::algorithms::Lms;
@@ -13,7 +13,7 @@ pub struct LmsOptions<F: Float> {
 
 #[derive(Debug, Clone)]
 pub struct LmsFilter<F: Float> {
-    inner: SampleFilterBase<F, Lms<F>>,
+    inner: FilterBase<F, Lms<F>>,
 }
 impl<F: Float> LmsFilter<F> {
     /// # Errors
@@ -22,14 +22,15 @@ impl<F: Float> LmsFilter<F> {
     #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
     pub fn new(options: LmsOptions<F>, window_size: WindowSize) -> Result<Self> {
         let lms = Lms::new(options.mu)?;
-        let filter = SampleFilterBase::new(lms, *window_size)?;
+        let block_size = 1;
+        let filter = FilterBase::new(lms, *window_size, block_size)?;
         Ok(Self { inner: filter })
     }
 
     // TODO: from_weights() ?
 }
 impl<F: Float> Deref for LmsFilter<F> {
-    type Target = SampleFilterBase<F, Lms<F>>;
+    type Target = FilterBase<F, Lms<F>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -42,6 +43,7 @@ impl<F: Float> DerefMut for LmsFilter<F> {
 }
 
 #[derive(Debug, Clone)]
+// TODO: remove?
 pub struct BlockLmsFilter<F: Float> {
     inner: FilterBase<F, Lms<F>>,
 }
@@ -87,7 +89,7 @@ mod tests {
 
         let filter =
             LmsFilter::new(LmsOptions { mu }, WindowSize::new(window_size).unwrap()).unwrap();
-        let expected_inner = SampleFilterBase::new(Lms::new(mu).unwrap(), window_size).unwrap();
+        let expected_inner = FilterBase::new(Lms::new(mu).unwrap(), window_size, 1).unwrap();
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), window_size);

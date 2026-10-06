@@ -10,8 +10,8 @@ pub trait Algorithm<F: Float> {
     /// `error` are the cleaned samples from the current block.
     /// `noise_ref` is the noise reference signal within the current processing window (the $k$ most recent samples).
     ///
-    fn update_block(
-        &self,
+    fn update_step(
+        &mut self,
         weights: &mut FilterWeights<F>,
         error: &BlockError<F>,
         noise_ref: &BlockNoiseBuffer<F>,
@@ -27,7 +27,7 @@ pub trait SampleAlgorithm<F: Float> {
     /// `error` is the cleaned sample from the current time step.
     /// `noise_ref` is the noise reference signal within the current processing window (the $k$ most recent samples).
     ///
-    fn update_step(
+    fn update_sample(
         &mut self,
         weights: &mut FilterWeights<F>,
         error: OutputSample<F>,

@@ -123,7 +123,7 @@ impl<F: Float, A: SampleAlgorithm<F>> AdaptiveFilter<F> for SampleFilterBase<F, 
             cleaned_signal.push(error);
 
             self.algorithm
-                .update_step(&mut self.weights, error, &noise_ref_buffer);
+                .update_sample(&mut self.weights, error, &noise_ref_buffer);
         }
 
         Ok(cleaned_signal.into_inner())
@@ -167,15 +167,15 @@ impl<F: Float, A: SampleAlgorithm<F>> AdaptiveFilter<F> for SampleFilterBase<F, 
 mod tests {
     use super::*;
 
-    use crate::algorithms::Lms;
+    use crate::algorithms::Nlms;
     use crate::error::Error;
     use crate::test_utils::all_approx_equal;
 
-    fn testing_filter() -> SampleFilterBase<f64, Lms<f64>> {
+    fn testing_filter() -> SampleFilterBase<f64, Nlms<f64>> {
         let window_size = 3;
         let weights = [1.0, -2.0, 0.5];
 
-        let mut filter = SampleFilterBase::new(Lms::new(1.0).unwrap(), window_size).unwrap();
+        let mut filter = SampleFilterBase::new(Nlms::new(1.0, 1e-8).unwrap(), window_size).unwrap();
         for (i, val) in weights.iter().enumerate() {
             filter.weights[i] = *val;
         }
@@ -185,10 +185,10 @@ mod tests {
     #[test]
     fn new_works() {
         let window_size = 3;
-        let filter = SampleFilterBase::new(Lms::new(1.0).unwrap(), window_size).unwrap();
+        let filter = SampleFilterBase::new(Nlms::new(1.0, 1e-8).unwrap(), window_size).unwrap();
 
         assert_eq!(filter.window_size, WindowSize::new(window_size).unwrap());
-        assert_eq!(filter.algorithm, Lms::new(1.0).unwrap());
+        assert_eq!(filter.algorithm, Nlms::new(1.0, 1e-8).unwrap());
         assert!(all_approx_equal(filter.weights.iter(), [0.0; 3].iter()));
     }
 
@@ -214,7 +214,7 @@ mod tests {
         let weights = vec![1.0, 2.0, 3.0];
 
         let filter =
-            SampleFilterBase::from_weights(Lms::new(1.0).unwrap(), weights.clone()).unwrap();
+            SampleFilterBase::from_weights(Nlms::new(1.0, 1e-8).unwrap(), weights.clone()).unwrap();
 
         assert!(all_approx_equal(weights.iter(), filter.weights().iter()));
     }
@@ -224,7 +224,7 @@ mod tests {
         let empty_vec = vec![];
 
         assert!(matches!(
-            SampleFilterBase::from_weights(Lms::new(1.0).unwrap(), empty_vec),
+            SampleFilterBase::from_weights(Nlms::new(1.0, 1e-8).unwrap(), empty_vec),
             Err(Error::EmptyInputArr)
         ));
     }

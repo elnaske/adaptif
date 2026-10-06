@@ -13,7 +13,7 @@ pub struct MyAlgorithm<F: Float> {
 // Implement the Algorithm trait so the algorithm can be used with SampleFilterBase
 impl<F: Float> SampleAlgorithm<F> for MyAlgorithm<F> {
     // This function is called every iteration during adaptation to update the weights
-    fn update_step(
+    fn update_sample(
         &mut self,
         weights: &mut FilterWeights<F>,
         error: OutputSample<F>,

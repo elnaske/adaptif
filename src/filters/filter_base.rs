@@ -14,6 +14,7 @@ pub struct FilterBase<F: Float, A: Algorithm<F>> {
     algorithm: A,
     weights: FilterWeights<F>,
     window_size: WindowSize,
+    // TODO: replace with ProcessingMode enum
     block_size: BlockSize,
 }
 impl<F: Float, A: Algorithm<F>> FilterBase<F, A> {
@@ -151,7 +152,7 @@ impl<F: Float, A: Algorithm<F>> AdaptiveFilter<F> for FilterBase<F, A> {
                 );
 
                 self.algorithm
-                    .update_block(&mut self.weights, &block_error, &noise_ref_buffer);
+                    .update_step(&mut self.weights, &block_error, &noise_ref_buffer);
             } else {
                 // last block: finish off remaining samples w/o updating the weights
                 self.process_block(
@@ -242,8 +243,8 @@ mod tests {
         }
     }
     impl<F: Float> Algorithm<F> for UpdateCallCounter {
-        fn update_block(
-            &self,
+        fn update_step(
+            &mut self,
             _weights: &mut FilterWeights<F>,
             _error: &BlockError<F>,
             _noise_ref: &BlockNoiseBuffer<F>,
