@@ -15,7 +15,8 @@ use super::macros::generate_filter_bindings;
 
 use crate::Error;
 use crate::algorithms::{Lms, Nlms, Rls};
-use crate::filters::{AdaptiveFilter, FilterBase, SampleFilterBase};
+use crate::filters::{AdaptiveFilter, FilterBase, ProcessingMode, SampleFilterBase};
+use crate::types::BlockSize;
 use crate::types::signals::{InputSignal, NoiseReference};
 
 impl Error {
@@ -119,7 +120,8 @@ impl LMSFilter {
     #[new]
     fn new(mu: f64, window_size: usize) -> PyResult<Self> {
         let lms = Lms::new(mu).map_err(|e| e.to_pyerr())?;
-        let filter = FilterBase::new(lms, window_size, 1).map_err(|e| e.to_pyerr())?;
+        let filter =
+            FilterBase::new(lms, window_size, ProcessingMode::Sample).map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -131,7 +133,8 @@ impl LMSFilter {
 
         let weights = weights.as_array().iter().copied().collect::<Vec<f64>>();
 
-        let filter = FilterBase::from_weights(lms, weights, 1).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::from_weights(lms, weights, ProcessingMode::Sample)
+            .map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -200,7 +203,11 @@ impl BlockLMSFilter {
     #[new]
     fn new(mu: f64, window_size: usize, block_size: usize) -> PyResult<Self> {
         let lms = Lms::new(mu).map_err(|e| e.to_pyerr())?;
-        let filter = FilterBase::new(lms, window_size, block_size).map_err(|e| e.to_pyerr())?;
+
+        let block_size = BlockSize::new(block_size).map_err(|e| e.to_pyerr())?;
+
+        let filter = FilterBase::new(lms, window_size, ProcessingMode::Block(block_size))
+            .map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }
@@ -209,10 +216,12 @@ impl BlockLMSFilter {
     fn from_weights(mu: f64, weights: PyReadonlyArray1<f64>, block_size: usize) -> PyResult<Self> {
         let lms = Lms::new(mu).map_err(|e| e.to_pyerr())?;
 
+        let block_size = BlockSize::new(block_size).map_err(|e| e.to_pyerr())?;
+
         let weights = weights.as_array().iter().copied().collect::<Vec<f64>>();
 
-        let filter =
-            FilterBase::from_weights(lms, weights, block_size).map_err(|e| e.to_pyerr())?;
+        let filter = FilterBase::from_weights(lms, weights, ProcessingMode::Block(block_size))
+            .map_err(|e| e.to_pyerr())?;
 
         Ok(Self(filter))
     }

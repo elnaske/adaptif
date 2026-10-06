@@ -4,6 +4,7 @@ use super::FilterBase;
 
 use crate::Result;
 use crate::algorithms::Lms;
+use crate::filters::ProcessingMode;
 use crate::types::{BlockSize, Float, WindowSize};
 
 #[derive(Debug, Clone)]
@@ -22,8 +23,7 @@ impl<F: Float> LmsFilter<F> {
     #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
     pub fn new(options: LmsOptions<F>, window_size: WindowSize) -> Result<Self> {
         let lms = Lms::new(options.mu)?;
-        let block_size = 1;
-        let filter = FilterBase::new(lms, *window_size, block_size)?;
+        let filter = FilterBase::new(lms, *window_size, ProcessingMode::Sample)?;
         Ok(Self { inner: filter })
     }
 
@@ -33,8 +33,7 @@ impl<F: Float> LmsFilter<F> {
     #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
     pub fn from_weights(options: LmsOptions<F>, weights: Vec<F>) -> Result<Self> {
         let lms = Lms::new(options.mu)?;
-        let block_size = 1;
-        let filter = FilterBase::from_weights(lms, weights, block_size)?;
+        let filter = FilterBase::from_weights(lms, weights, ProcessingMode::Sample)?;
         Ok(Self { inner: filter })
     }
 }
@@ -67,7 +66,7 @@ impl<F: Float> BlockLmsFilter<F> {
         block_size: BlockSize,
     ) -> Result<Self> {
         let lms = Lms::new(options.mu)?;
-        let filter = FilterBase::new(lms, *window_size, *block_size)?;
+        let filter = FilterBase::new(lms, *window_size, ProcessingMode::Block(block_size))?;
         Ok(Self { inner: filter })
     }
 
@@ -81,7 +80,7 @@ impl<F: Float> BlockLmsFilter<F> {
         block_size: BlockSize,
     ) -> Result<Self> {
         let lms = Lms::new(options.mu)?;
-        let filter = FilterBase::from_weights(lms, weights, *block_size)?;
+        let filter = FilterBase::from_weights(lms, weights, ProcessingMode::Block(block_size))?;
         Ok(Self { inner: filter })
     }
 }
@@ -110,7 +109,8 @@ mod tests {
 
         let filter =
             LmsFilter::new(LmsOptions { mu }, WindowSize::new(window_size).unwrap()).unwrap();
-        let expected_inner = FilterBase::new(Lms::new(mu).unwrap(), window_size, 1).unwrap();
+        let expected_inner =
+            FilterBase::new(Lms::new(mu).unwrap(), window_size, ProcessingMode::Sample).unwrap();
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), window_size);
@@ -122,8 +122,12 @@ mod tests {
         let weights = vec![1.0, 2.0, 3.0];
 
         let filter = LmsFilter::from_weights(LmsOptions { mu }, weights.clone()).unwrap();
-        let expected_inner =
-            FilterBase::from_weights(Lms::new(mu).unwrap(), weights.clone(), 1).unwrap();
+        let expected_inner = FilterBase::from_weights(
+            Lms::new(mu).unwrap(),
+            weights.clone(),
+            ProcessingMode::Sample,
+        )
+        .unwrap();
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), weights.len());
@@ -133,39 +137,43 @@ mod tests {
     fn block_lms_new_works() {
         let mu = 0.1;
         let window_size = 16;
-        let block_size = 8;
+        let block_size = BlockSize::new(8).unwrap();
 
         let filter = BlockLmsFilter::new(
             LmsOptions { mu },
             WindowSize::new(window_size).unwrap(),
-            BlockSize::new(block_size).unwrap(),
+            block_size,
         )
         .unwrap();
-        let expected_inner =
-            FilterBase::new(Lms::new(mu).unwrap(), window_size, block_size).unwrap();
+        let expected_inner = FilterBase::new(
+            Lms::new(mu).unwrap(),
+            window_size,
+            ProcessingMode::Block(block_size),
+        )
+        .unwrap();
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), window_size);
-        assert_eq!(filter.block_size(), block_size);
+        assert_eq!(filter.block_size(), *block_size);
     }
 
     #[test]
     fn block_lms_from_weights_works() {
         let mu = 0.1;
         let weights = vec![1.0, 2.0, 3.0];
-        let block_size = 8;
+        let block_size = BlockSize::new(8).unwrap();
 
-        let filter = BlockLmsFilter::from_weights(
-            LmsOptions { mu },
+        let filter =
+            BlockLmsFilter::from_weights(LmsOptions { mu }, weights.clone(), block_size).unwrap();
+        let expected_inner = FilterBase::from_weights(
+            Lms::new(mu).unwrap(),
             weights.clone(),
-            BlockSize::new(block_size).unwrap(),
+            ProcessingMode::Block(block_size),
         )
         .unwrap();
-        let expected_inner =
-            FilterBase::from_weights(Lms::new(mu).unwrap(), weights.clone(), block_size).unwrap();
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), weights.len());
-        assert_eq!(filter.block_size(), block_size);
+        assert_eq!(filter.block_size(), *block_size);
     }
 }

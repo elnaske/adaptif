@@ -3,7 +3,7 @@ use std::error::Error;
 // TODO: replace FilterBase with LmsFilter
 
 use adaptif::algorithms::Lms;
-use adaptif::filters::{AdaptiveFilter as _, FilterBase};
+use adaptif::filters::{AdaptiveFilter as _, FilterBase, ProcessingMode};
 use adaptif::types::signals::{InputSignal, NoiseReference};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let lms_config = Lms::new(1.0)?; // The parameters used by the LMS filter
     let window_size = 1024; // How many samples we process at a time
     // Initialize the filter
-    let mut lms = FilterBase::new(lms_config, window_size, 1)?;
+    let mut lms = FilterBase::new(lms_config, window_size, ProcessingMode::Sample)?;
 
     // Adapt the filter to the inputs and get the iteratively cleaned signal.
     let _cleaned_signal = lms.adapt(&input_signal, &noise_ref)?;

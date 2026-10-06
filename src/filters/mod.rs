@@ -2,7 +2,7 @@ mod sample_filter_base;
 pub use sample_filter_base::SampleFilterBase;
 
 mod filter_base;
-pub use filter_base::FilterBase;
+pub use filter_base::{FilterBase, ProcessingMode};
 
 mod lms;
 pub use lms::{BlockLmsFilter, LmsFilter};
