@@ -1,8 +1,8 @@
+mod sample_filter_base;
+pub use sample_filter_base::SampleFilterBase;
+
 mod filter_base;
 pub use filter_base::FilterBase;
-
-mod block_filter_base;
-pub use block_filter_base::BlockFilterBase;
 
 mod lms;
 pub use lms::{BlockLmsFilter, LmsFilter};

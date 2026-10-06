@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use super::FilterBase;
+use super::SampleFilterBase;
 
 use crate::Result;
 use crate::algorithms::Rls;
@@ -14,7 +14,7 @@ pub struct RlsOptions<F: Float> {
 
 #[derive(Debug, Clone)]
 pub struct RlsFilter<F: Float> {
-    inner: FilterBase<F, Rls<F>>,
+    inner: SampleFilterBase<F, Rls<F>>,
 }
 impl<F: Float> RlsFilter<F> {
     /// # Errors
@@ -23,14 +23,14 @@ impl<F: Float> RlsFilter<F> {
     #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
     pub fn new(options: RlsOptions<F>, window_size: WindowSize) -> Result<Self> {
         let lms = Rls::new(options.forgetting_factor, options.p_init_scale)?;
-        let filter = FilterBase::new(lms, *window_size)?;
+        let filter = SampleFilterBase::new(lms, *window_size)?;
         Ok(Self { inner: filter })
     }
 
     // TODO: from_weights() ?
 }
 impl<F: Float> Deref for RlsFilter<F> {
-    type Target = FilterBase<F, Rls<F>>;
+    type Target = SampleFilterBase<F, Rls<F>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -61,7 +61,7 @@ mod tests {
             WindowSize::new(window_size).unwrap(),
         )
         .unwrap();
-        let expected_inner = FilterBase::new(
+        let expected_inner = SampleFilterBase::new(
             Rls::new(forgetting_factor, p_init_scale).unwrap(),
             window_size,
         )

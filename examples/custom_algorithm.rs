@@ -1,7 +1,7 @@
 use std::error::Error;
 
-use adaptif::algorithms::Algorithm;
-use adaptif::filters::{AdaptiveFilter as _, FilterBase};
+use adaptif::algorithms::SampleAlgorithm;
+use adaptif::filters::{AdaptiveFilter as _, SampleFilterBase};
 use adaptif::types::buffers::NoiseBuffer;
 use adaptif::types::signals::{InputSignal, NoiseReference, OutputSample};
 use adaptif::types::{FilterWeights, Float};
@@ -10,8 +10,8 @@ use adaptif::types::{FilterWeights, Float};
 pub struct MyAlgorithm<F: Float> {
     pub alpha: F,
 }
-// Implement the Algorithm trait so the algorithm can be used with FilterBase
-impl<F: Float> Algorithm<F> for MyAlgorithm<F> {
+// Implement the Algorithm trait so the algorithm can be used with SampleFilterBase
+impl<F: Float> SampleAlgorithm<F> for MyAlgorithm<F> {
     // This function is called every iteration during adaptation to update the weights
     fn update_step(
         &mut self,
@@ -34,8 +34,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let algorithm_cfg = MyAlgorithm { alpha: 1.0 };
     let window_size = 1024;
 
-    // Instantiate the filter using FilterBase and our custom algorithm
-    let mut filter = FilterBase::new(algorithm_cfg, window_size)?;
+    // Instantiate the filter using SampleFilterBase and our custom algorithm
+    let mut filter = SampleFilterBase::new(algorithm_cfg, window_size)?;
 
     // Adapt the filter using our algorithm's update rules
     let _output = filter.adapt(&input_signal, &noise_ref)?;

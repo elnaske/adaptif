@@ -5,7 +5,7 @@ use crate::types::signals::OutputSample;
 use crate::types::{FilterWeights, Float, WindowSize};
 use crate::{Error, Result};
 
-use crate::algorithms::Algorithm;
+use crate::algorithms::SampleAlgorithm;
 
 #[derive(Debug, Clone, PartialEq)]
 /// Recursive least squares algorithm.
@@ -126,7 +126,7 @@ impl<F: Float> Rls<F> {
     }
 }
 
-impl<F: Float> Algorithm<F> for Rls<F> {
+impl<F: Float> SampleAlgorithm<F> for Rls<F> {
     /// Updates the filter weights using the following algorithm.
     ///
     /// The Kalman gain vector, ``k_n`` is calculated as:

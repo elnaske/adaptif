@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use super::{BlockFilterBase, FilterBase};
+use super::{FilterBase, SampleFilterBase};
 
 use crate::Result;
 use crate::algorithms::Lms;
@@ -13,7 +13,7 @@ pub struct LmsOptions<F: Float> {
 
 #[derive(Debug, Clone)]
 pub struct LmsFilter<F: Float> {
-    inner: FilterBase<F, Lms<F>>,
+    inner: SampleFilterBase<F, Lms<F>>,
 }
 impl<F: Float> LmsFilter<F> {
     /// # Errors
@@ -22,14 +22,14 @@ impl<F: Float> LmsFilter<F> {
     #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
     pub fn new(options: LmsOptions<F>, window_size: WindowSize) -> Result<Self> {
         let lms = Lms::new(options.mu)?;
-        let filter = FilterBase::new(lms, *window_size)?;
+        let filter = SampleFilterBase::new(lms, *window_size)?;
         Ok(Self { inner: filter })
     }
 
     // TODO: from_weights() ?
 }
 impl<F: Float> Deref for LmsFilter<F> {
-    type Target = FilterBase<F, Lms<F>>;
+    type Target = SampleFilterBase<F, Lms<F>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -43,7 +43,7 @@ impl<F: Float> DerefMut for LmsFilter<F> {
 
 #[derive(Debug, Clone)]
 pub struct BlockLmsFilter<F: Float> {
-    inner: BlockFilterBase<F, Lms<F>>,
+    inner: FilterBase<F, Lms<F>>,
 }
 impl<F: Float> BlockLmsFilter<F> {
     /// # Errors
@@ -56,14 +56,14 @@ impl<F: Float> BlockLmsFilter<F> {
         block_size: BlockSize,
     ) -> Result<Self> {
         let lms = Lms::new(options.mu)?;
-        let filter = BlockFilterBase::new(lms, *window_size, *block_size)?;
+        let filter = FilterBase::new(lms, *window_size, *block_size)?;
         Ok(Self { inner: filter })
     }
 
     // TODO: from_weights() ?
 }
 impl<F: Float> Deref for BlockLmsFilter<F> {
-    type Target = BlockFilterBase<F, Lms<F>>;
+    type Target = FilterBase<F, Lms<F>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -87,7 +87,7 @@ mod tests {
 
         let filter =
             LmsFilter::new(LmsOptions { mu }, WindowSize::new(window_size).unwrap()).unwrap();
-        let expected_inner = FilterBase::new(Lms::new(mu).unwrap(), window_size).unwrap();
+        let expected_inner = SampleFilterBase::new(Lms::new(mu).unwrap(), window_size).unwrap();
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), window_size);
@@ -106,7 +106,7 @@ mod tests {
         )
         .unwrap();
         let expected_inner =
-            BlockFilterBase::new(Lms::new(mu).unwrap(), window_size, block_size).unwrap();
+            FilterBase::new(Lms::new(mu).unwrap(), window_size, block_size).unwrap();
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), window_size);

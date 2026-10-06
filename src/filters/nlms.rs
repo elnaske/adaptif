@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use super::FilterBase;
+use super::SampleFilterBase;
 
 use crate::Result;
 use crate::algorithms::Nlms;
@@ -14,7 +14,7 @@ pub struct NlmsOptions<F: Float> {
 
 #[derive(Debug, Clone)]
 pub struct NlmsFilter<F: Float> {
-    inner: FilterBase<F, Nlms<F>>,
+    inner: SampleFilterBase<F, Nlms<F>>,
 }
 impl<F: Float> NlmsFilter<F> {
     /// # Errors
@@ -23,14 +23,14 @@ impl<F: Float> NlmsFilter<F> {
     #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
     pub fn new(options: NlmsOptions<F>, window_size: WindowSize) -> Result<Self> {
         let lms = Nlms::new(options.mu, options.eps)?;
-        let filter = FilterBase::new(lms, *window_size)?;
+        let filter = SampleFilterBase::new(lms, *window_size)?;
         Ok(Self { inner: filter })
     }
 
     // TODO: from_weights() ?
 }
 impl<F: Float> Deref for NlmsFilter<F> {
-    type Target = FilterBase<F, Nlms<F>>;
+    type Target = SampleFilterBase<F, Nlms<F>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -58,7 +58,8 @@ mod tests {
             WindowSize::new(window_size).unwrap(),
         )
         .unwrap();
-        let expected_inner = FilterBase::new(Nlms::new(mu, eps).unwrap(), window_size).unwrap();
+        let expected_inner =
+            SampleFilterBase::new(Nlms::new(mu, eps).unwrap(), window_size).unwrap();
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), window_size);

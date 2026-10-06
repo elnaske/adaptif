@@ -3,7 +3,7 @@ use crate::types::signals::OutputSample;
 use crate::types::{FilterWeights, Float};
 use crate::{Error, Result};
 
-use crate::algorithms::Algorithm;
+use crate::algorithms::SampleAlgorithm;
 
 #[derive(Debug, Clone, PartialEq)]
 /// Normalized least mean squares algorithm.
@@ -30,7 +30,7 @@ impl<F: Float> Nlms<F> {
         Ok(Nlms { mu, eps })
     }
 }
-impl<F: Float> Algorithm<F> for Nlms<F> {
+impl<F: Float> SampleAlgorithm<F> for Nlms<F> {
     /// Updates the filter weights using the following equation:
     ///
     /// $w_{n+1} = ``w_n`` + \frac{\mu}{\epsilon + \|``x_n``\|^2} ``e_n`` ``x_n``$
