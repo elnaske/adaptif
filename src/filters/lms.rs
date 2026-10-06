@@ -27,7 +27,16 @@ impl<F: Float> LmsFilter<F> {
         Ok(Self { inner: filter })
     }
 
-    // TODO: from_weights() ?
+    /// # Errors
+    ///
+    /// Returns an error if `weights.is_empty()`.
+    #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
+    pub fn from_weights(options: LmsOptions<F>, weights: Vec<F>) -> Result<Self> {
+        let lms = Lms::new(options.mu)?;
+        let block_size = 1;
+        let filter = FilterBase::from_weights(lms, weights, block_size)?;
+        Ok(Self { inner: filter })
+    }
 }
 impl<F: Float> Deref for LmsFilter<F> {
     type Target = FilterBase<F, Lms<F>>;
@@ -62,7 +71,19 @@ impl<F: Float> BlockLmsFilter<F> {
         Ok(Self { inner: filter })
     }
 
-    // TODO: from_weights() ?
+    /// # Errors
+    ///
+    /// Returns an error if `weights.is_empty()`.
+    #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
+    pub fn from_weights(
+        options: LmsOptions<F>,
+        weights: Vec<F>,
+        block_size: BlockSize,
+    ) -> Result<Self> {
+        let lms = Lms::new(options.mu)?;
+        let filter = FilterBase::from_weights(lms, weights, *block_size)?;
+        Ok(Self { inner: filter })
+    }
 }
 impl<F: Float> Deref for BlockLmsFilter<F> {
     type Target = FilterBase<F, Lms<F>>;
@@ -83,7 +104,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lms_new() {
+    fn lms_new_works() {
         let mu = 0.1;
         let window_size = 16;
 
@@ -96,7 +117,20 @@ mod tests {
     }
 
     #[test]
-    fn block_lms_new() {
+    fn lms_from_weights_works() {
+        let mu = 0.1;
+        let weights = vec![1.0, 2.0, 3.0];
+
+        let filter = LmsFilter::from_weights(LmsOptions { mu }, weights.clone()).unwrap();
+        let expected_inner =
+            FilterBase::from_weights(Lms::new(mu).unwrap(), weights.clone(), 1).unwrap();
+
+        assert_eq!(filter.inner, expected_inner);
+        assert_eq!(filter.window_size(), weights.len());
+    }
+
+    #[test]
+    fn block_lms_new_works() {
         let mu = 0.1;
         let window_size = 16;
         let block_size = 8;
@@ -112,6 +146,26 @@ mod tests {
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), window_size);
+        assert_eq!(filter.block_size(), block_size);
+    }
+
+    #[test]
+    fn block_lms_from_weights_works() {
+        let mu = 0.1;
+        let weights = vec![1.0, 2.0, 3.0];
+        let block_size = 8;
+
+        let filter = BlockLmsFilter::from_weights(
+            LmsOptions { mu },
+            weights.clone(),
+            BlockSize::new(block_size).unwrap(),
+        )
+        .unwrap();
+        let expected_inner =
+            FilterBase::from_weights(Lms::new(mu).unwrap(), weights.clone(), block_size).unwrap();
+
+        assert_eq!(filter.inner, expected_inner);
+        assert_eq!(filter.window_size(), weights.len());
         assert_eq!(filter.block_size(), block_size);
     }
 }

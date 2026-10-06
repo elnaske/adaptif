@@ -22,12 +22,20 @@ impl<F: Float> NlmsFilter<F> {
     /// Returns an error if mu or eps <= 0.0.
     #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
     pub fn new(options: NlmsOptions<F>, window_size: WindowSize) -> Result<Self> {
-        let lms = Nlms::new(options.mu, options.eps)?;
-        let filter = SampleFilterBase::new(lms, *window_size)?;
+        let nlms = Nlms::new(options.mu, options.eps)?;
+        let filter = SampleFilterBase::new(nlms, *window_size)?;
         Ok(Self { inner: filter })
     }
 
-    // TODO: from_weights() ?
+    /// # Errors
+    ///
+    /// Returns an error if `weights.is_empty()`.
+    #[allow(clippy::needless_pass_by_value, reason = "All fields are moved")]
+    pub fn from_weights(options: NlmsOptions<F>, weights: Vec<F>) -> Result<Self> {
+        let nlms = Nlms::new(options.mu, options.eps)?;
+        let filter = SampleFilterBase::from_weights(nlms, weights)?;
+        Ok(Self { inner: filter })
+    }
 }
 impl<F: Float> Deref for NlmsFilter<F> {
     type Target = SampleFilterBase<F, Nlms<F>>;
@@ -48,7 +56,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn nlms_new() {
+    fn new_works() {
         let mu = 0.1;
         let eps = 1e-8;
         let window_size = 16;
@@ -63,5 +71,19 @@ mod tests {
 
         assert_eq!(filter.inner, expected_inner);
         assert_eq!(filter.window_size(), window_size);
+    }
+
+    #[test]
+    fn from_weights_works() {
+        let mu = 0.1;
+        let eps = 1e-8;
+        let weights = vec![1.0, 2.0, 3.0];
+
+        let filter = NlmsFilter::from_weights(NlmsOptions { mu, eps }, weights.clone()).unwrap();
+        let expected_inner =
+            SampleFilterBase::from_weights(Nlms::new(mu, eps).unwrap(), weights.clone()).unwrap();
+
+        assert_eq!(filter.inner, expected_inner);
+        assert_eq!(filter.window_size(), weights.len());
     }
 }
