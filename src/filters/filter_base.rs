@@ -93,49 +93,6 @@ impl<F: Float, A: Algorithm<F>> FilterBase<F, A> {
         // Returning a slice so that FilterWeights doesn't have to part of the public API
         &self.weights
     }
-
-    /// # Panics
-    ///
-    /// Panics if `range` contains indices that are not within
-    /// the bounds of `input_signal` or `noise_ref`.
-    fn process_block(
-        &self,
-        range: Range<usize>,
-        input_signal: &InputSignal<F>,
-        noise_ref: &NoiseReference<F>,
-        noise_ref_buffer: &mut BlockNoiseBuffer<F>,
-        block_error: &mut BlockError<F>,
-        cleaned_signal: &mut OutputSignal<F>,
-    ) {
-        for n in range {
-            #[allow(
-                clippy::expect_used,
-                reason = "This function is only called internally.
-                If an invalid range is (accidentally) provided, we don't want pass
-                it to the public caller or have it silently fail, so we panic instead."
-            )]
-            let (input_sample, noise_sample) = input_signal
-                .get_sample(n)
-                .zip(noise_ref.get_sample(n))
-                .expect("process_block() called with invalid range");
-
-            noise_ref_buffer.push(*noise_sample);
-
-            let current_window = noise_ref_buffer.iter().copied().take(*self.window_size);
-            let noise_estimate = NoiseEstimate(
-                self.weights
-                    .iter()
-                    .copied()
-                    .zip(current_window)
-                    .map(|(w, x)| w * x)
-                    .sum(),
-            );
-
-            let error = compute_error(input_sample, noise_estimate);
-            block_error.push(error);
-            cleaned_signal.push(error);
-        }
-    }
 }
 
 impl<F: Float, A: Algorithm<F>> AdaptiveFilter<F> for FilterBase<F, A> {
@@ -160,8 +117,9 @@ impl<F: Float, A: Algorithm<F>> AdaptiveFilter<F> for FilterBase<F, A> {
             let block_end = block_start + *self.block_size;
 
             if block_end <= n_samples {
-                self.process_block(
+                process_block(
                     block_start..block_end,
+                    &self.weights,
                     input_signal,
                     noise_ref,
                     &mut noise_ref_buffer,
@@ -173,8 +131,9 @@ impl<F: Float, A: Algorithm<F>> AdaptiveFilter<F> for FilterBase<F, A> {
                     .update_step(&mut self.weights, &block_error, &noise_ref_buffer);
             } else {
                 // last block: finish off remaining samples w/o updating the weights
-                self.process_block(
+                process_block(
                     block_start..n_samples,
+                    &self.weights,
                     input_signal,
                     noise_ref,
                     &mut noise_ref_buffer,
@@ -212,28 +171,101 @@ impl<F: Float, A: Algorithm<F>> AdaptiveFilter<F> for FilterBase<F, A> {
         input_signal: &InputSignal<F>,
         noise_ref: &NoiseReference<F>,
     ) -> Result<Vec<F>> {
-        check_signal_lengths(input_signal, noise_ref)?;
+        filter_impl(&self.weights, input_signal, noise_ref, self.block_size)
+    }
+}
 
-        let mut noise_ref_buffer = BlockNoiseBuffer::new(&self.weights, self.block_size);
-        let mut block_error = BlockError::new(self.block_size);
-        let mut cleaned_signal = OutputSignal::new(input_signal);
+/// Because of how monomorphization of generics works, the compiler generates a separate
+/// version of `FilterBase` and its methods. Since `filter()` is part of an impl block
+/// that is generic over Algorithm, but doesn't use the Algorithm object, this method
+/// will be copied 1:1 for each version of `FilterBase` (i.e. `FilterBase<Lms>`,
+/// `FilterBase<Nlms>`, etc.). We therefore factor out the (algorithm-independent) logic
+/// into `filter_impl()` so that just the call to it will be monomorphized.
+fn filter_impl<F>(
+    weights: &FilterWeights<F>,
+    input_signal: &InputSignal<F>,
+    noise_ref: &NoiseReference<F>,
+    block_size: BlockSize,
+) -> Result<Vec<F>>
+where
+    F: Float,
+{
+    check_signal_lengths(input_signal, noise_ref)?;
 
-        let n_samples = input_signal.len();
+    let mut noise_ref_buffer = BlockNoiseBuffer::new(weights, block_size);
+    let mut block_error = BlockError::new(block_size);
+    let mut cleaned_signal = OutputSignal::new(input_signal);
 
-        for block_start in (0..n_samples).step_by(*self.block_size) {
-            let block_end = std::cmp::min(block_start + *self.block_size, n_samples);
+    let n_samples = input_signal.len();
 
-            self.process_block(
-                block_start..block_end,
-                input_signal,
-                noise_ref,
-                &mut noise_ref_buffer,
-                &mut block_error,
-                &mut cleaned_signal,
-            );
-        }
+    for block_start in (0..n_samples).step_by(*block_size) {
+        let block_end = std::cmp::min(block_start + *block_size, n_samples);
 
-        Ok(cleaned_signal.into_inner())
+        process_block(
+            block_start..block_end,
+            weights,
+            input_signal,
+            noise_ref,
+            &mut noise_ref_buffer,
+            &mut block_error,
+            &mut cleaned_signal,
+        );
+    }
+
+    Ok(cleaned_signal.into_inner())
+}
+
+/// Calculates the error for a block of samples.
+/// Like with `filter_impl()`, this function defined outside of `FilterBase`'s impl
+/// blocks so that it isn't monomorphized.
+///
+/// # Panics
+///
+/// Panics if `range` contains indices that are not within
+/// the bounds of `input_signal` or `noise_ref`.
+fn process_block<F>(
+    range: Range<usize>,
+    weights: &FilterWeights<F>,
+    input_signal: &InputSignal<F>,
+    noise_ref: &NoiseReference<F>,
+    noise_ref_buffer: &mut BlockNoiseBuffer<F>,
+    block_error: &mut BlockError<F>,
+    cleaned_signal: &mut OutputSignal<F>,
+) where
+    F: Float,
+{
+    for n in range {
+        #[allow(
+            clippy::expect_used,
+            reason = "This function is only called internally.
+                If an invalid range is (accidentally) provided, we don't want pass
+                it to the public caller or have it silently fail, so we panic instead."
+        )]
+        let (input_sample, noise_sample) = input_signal
+            .get_sample(n)
+            .zip(noise_ref.get_sample(n))
+            .expect("process_block() called with invalid range");
+
+        noise_ref_buffer.push(*noise_sample);
+
+        let current_window = noise_ref_buffer
+            .iter()
+            .copied()
+            .take(*weights.window_size());
+
+        let noise_estimate = NoiseEstimate(
+            weights
+                .iter()
+                .copied()
+                .zip(current_window)
+                .map(|(w, x)| w * x)
+                .sum(),
+        );
+
+        let error = compute_error(input_sample, noise_estimate);
+
+        block_error.push(error);
+        cleaned_signal.push(error);
     }
 }
 
