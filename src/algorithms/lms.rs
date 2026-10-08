@@ -25,7 +25,7 @@ impl<F: Float> Lms<F> {
 impl<F: Float> Algorithm<F> for Lms<F> {
     /// Updates the filter weights using the following equation:
     ///
-    /// $w_{n+1} = \mu ``X_n``^T ``e_n``$
+    /// $w_{n+1} = ``w_n`` + \mu ``e_n``^T ``X_n``$
     /// where $``X_n``$ is a matrix with shape `(block_size, window_size)`,
     /// and $``e_n``$ is a vector of length `block_size`.
     fn update_step(
@@ -34,28 +34,16 @@ impl<F: Float> Algorithm<F> for Lms<F> {
         error: &BlockError<F>,
         noise_ref: &BlockNoiseBuffer<F>,
     ) {
-        for (n, w) in weights.iter_mut().enumerate() {
-            let mut acc = F::zero();
+        for (window_start, window_error) in error.iter().copied().enumerate() {
+            let curr_window_noise = noise_ref
+                .iter()
+                .copied()
+                .skip(window_start)
+                .take(*weights.window_size());
 
-            #[allow(
-                clippy::unwrap_used,
-                reason = "BlockNoiseBuffer has length `window_size + block_size - 1`.
-                This means the highest valid index is `window_size + block_size - 2`.
-                The max values for `n` and `b` are `window_size - 1` and `block_size - 1` respectively.
-                `(window_size - 1) + (block_size - 1) == window_size + block_size - 2`"
-            )]
-            for (b, e) in error.iter().copied().enumerate() {
-                // This is equivalent to a matrix multiplication.
-                // Since the noise references for the samples in the block overlap,
-                // we can save space by keeping them in a linear array of length
-                // `block_size + window_size - 1`.
-                // Thus, instead of indexing with `b * window_size + n` like in
-                // a (row-ordered) matrix, we use `n + b` to get the noise sample
-                // for block index `b` in window `n`.
-
-                acc += self.mu * e * (*noise_ref.get(n + b).unwrap());
+            for (w, x) in weights.iter_mut().zip(curr_window_noise) {
+                *w += self.mu * window_error * x;
             }
-            *w += acc;
         }
     }
 }
