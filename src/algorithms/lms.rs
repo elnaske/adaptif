@@ -1,3 +1,4 @@
+use crate::types::buffers::NoiseWindow;
 use crate::types::signals::OutputSample;
 use crate::types::{FilterWeights, Float};
 use crate::{Error, Result};
@@ -32,9 +33,9 @@ impl<F: Float> Algorithm<F> for Lms<F> {
         &mut self,
         weights: &mut FilterWeights<F>,
         error: OutputSample<F>,
-        noise_window: impl Iterator<Item = F>, // TODO: replace w/ actual type
+        noise_window: NoiseWindow<F>,
     ) {
-        for (w, x) in weights.iter_mut().zip(noise_window) {
+        for (w, x) in weights.iter_mut().zip(noise_window.iter()) {
             *w += self.mu * *error * x;
         }
     }
@@ -46,14 +47,17 @@ mod tests {
     use super::*;
     use crate::{
         test_utils::{all_approx_equal, block_noise_buffer_from, error_buffer_from},
-        types::{FilterWeights, WindowSize},
+        types::{BlockSize, FilterWeights, WindowSize},
     };
 
     #[test]
     fn update_lms_1() {
+        let window_size = WindowSize::new(2).unwrap();
+        let block_size = BlockSize::new(1).unwrap();
+
         let mut lms = Lms::new(0.5).unwrap();
         let e_n = error_buffer_from(&[2.0]);
-        let x_n = block_noise_buffer_from(&[1.0, -1.0]);
+        let x_n = block_noise_buffer_from(&[1.0, -1.0], window_size, block_size);
         let expected = [1.0, -1.0];
         let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
 
@@ -65,11 +69,14 @@ mod tests {
 
     #[test]
     fn update_lms_2() {
+        let window_size = WindowSize::new(2).unwrap();
+        let block_size = BlockSize::new(1).unwrap();
+
         let mut lms = Lms::new(1.0).unwrap();
         let e_n = error_buffer_from(&[1.0]);
-        let x_n = block_noise_buffer_from(&[5.0, 2.0]);
+        let x_n = block_noise_buffer_from(&[5.0, 2.0], window_size, block_size);
         let expected = [5.0, 2.0];
-        let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
+        let mut weights = FilterWeights::new(window_size);
 
         // TODO: replace w/ update_step()
         lms.update_block(&mut weights, &e_n, &x_n);
@@ -79,13 +86,18 @@ mod tests {
 
     #[test]
     fn update_block_lms_1() {
+        let window_size = WindowSize::new(2).unwrap();
+
         let mut lms = Lms::new(0.5).unwrap();
         // Because of the underlying queue implementation, the arrays here are ordered
         // from most to least recent sample
         let e_n = error_buffer_from(&[5.0, -6.0, 7.0]);
-        let x_n = block_noise_buffer_from(&[1.0, -2.0, 3.0, -4.0]);
+
+        let block_size = BlockSize::new(e_n.len()).unwrap();
+
+        let x_n = block_noise_buffer_from(&[1.0, -2.0, 3.0, -4.0], window_size, block_size);
         let expected = [19.0, -28.0];
-        let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
+        let mut weights = FilterWeights::new(window_size);
 
         lms.update_block(&mut weights, &e_n, &x_n);
 
@@ -94,13 +106,17 @@ mod tests {
 
     #[test]
     fn update_block_lms_2() {
+        let window_size = WindowSize::new(3).unwrap();
+
         let mut lms = Lms::new(1.0).unwrap();
         // Because of the underlying queue implementation, the arrays here are ordered
         // from most to least recent sample
         let e_n = error_buffer_from(&[1.0, -1.0, 1.5]);
-        let x_n = block_noise_buffer_from(&[1.0, -2.0, 3.0, -4.0, 5.0]);
+
+        let block_size = BlockSize::new(e_n.len()).unwrap();
+        let x_n = block_noise_buffer_from(&[1.0, -2.0, 3.0, -4.0, 5.0], window_size, block_size);
         let expected = [7.5, -11.0, 14.5];
-        let mut weights = FilterWeights::new(WindowSize::new(3).unwrap());
+        let mut weights = FilterWeights::new(window_size);
 
         lms.update_block(&mut weights, &e_n, &x_n);
 

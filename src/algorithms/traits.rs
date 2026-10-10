@@ -1,4 +1,4 @@
-use crate::types::buffers::{BlockError, BlockNoiseBuffer, NoiseBuffer};
+use crate::types::buffers::{BlockError, BlockNoiseBuffer, NoiseBuffer, NoiseWindow};
 use crate::types::signals::OutputSample;
 use crate::types::{FilterWeights, Float};
 
@@ -14,7 +14,7 @@ pub trait Algorithm<F: Float> {
         &mut self,
         weights: &mut FilterWeights<F>,
         error: OutputSample<F>,
-        noise_window: impl Iterator<Item = F>, // TODO: replace w/ actual type
+        noise_window: NoiseWindow<F>,
     );
 
     fn update_block(
@@ -24,11 +24,13 @@ pub trait Algorithm<F: Float> {
         noise_ref: &BlockNoiseBuffer<F>,
     ) {
         for (window_start, window_error) in error.iter().copied().enumerate() {
-            let current_window = noise_ref
-                .iter()
-                .copied()
-                .skip(window_start)
-                .take(*weights.window_size());
+            #[allow(
+                clippy::unwrap_used,
+                clippy::missing_panics_doc,
+                reason = "get_window() can only fail if window_start >= noise_ref.block_size.
+                error.len() == block_size, so window_start is always < block_size"
+            )]
+            let current_window = noise_ref.get_window(window_start).unwrap();
 
             self.update_step(weights, OutputSample(window_error), current_window);
         }

@@ -277,6 +277,7 @@ mod tests {
     use crate::algorithms::Lms;
     use crate::error::Error;
     use crate::test_utils::all_approx_equal;
+    use crate::types::buffers::NoiseWindow;
     use crate::types::signals::OutputSample;
 
     struct UpdateCallCounter {
@@ -298,7 +299,7 @@ mod tests {
             &mut self,
             _weights: &mut FilterWeights<F>,
             _error: OutputSample<F>,
-            _noise_window: impl Iterator<Item = F>,
+            _noise_window: NoiseWindow<F>,
         ) {
             *self.call_count.borrow_mut() += 1;
         }
