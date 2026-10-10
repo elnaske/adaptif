@@ -13,9 +13,26 @@ pub trait Algorithm<F: Float> {
     fn update_step(
         &mut self,
         weights: &mut FilterWeights<F>,
+        error: OutputSample<F>,
+        noise_window: impl Iterator<Item = F>, // TODO: replace w/ actual type
+    );
+
+    fn update_block(
+        &mut self,
+        weights: &mut FilterWeights<F>,
         error: &BlockError<F>,
         noise_ref: &BlockNoiseBuffer<F>,
-    );
+    ) {
+        for (window_start, window_error) in error.iter().copied().enumerate() {
+            let current_window = noise_ref
+                .iter()
+                .copied()
+                .skip(window_start)
+                .take(*weights.window_size());
+
+            self.update_step(weights, OutputSample(window_error), current_window);
+        }
+    }
 }
 
 /// Trait used for implementing algorithms with sample-based processing used in conjuction with

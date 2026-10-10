@@ -1,4 +1,4 @@
-use crate::types::buffers::{BlockError, BlockNoiseBuffer};
+use crate::types::signals::OutputSample;
 use crate::types::{FilterWeights, Float};
 use crate::{Error, Result};
 
@@ -31,19 +31,11 @@ impl<F: Float> Algorithm<F> for Lms<F> {
     fn update_step(
         &mut self,
         weights: &mut FilterWeights<F>,
-        error: &BlockError<F>,
-        noise_ref: &BlockNoiseBuffer<F>,
+        error: OutputSample<F>,
+        noise_window: impl Iterator<Item = F>, // TODO: replace w/ actual type
     ) {
-        for (window_start, window_error) in error.iter().copied().enumerate() {
-            let curr_window_noise = noise_ref
-                .iter()
-                .copied()
-                .skip(window_start)
-                .take(*weights.window_size());
-
-            for (w, x) in weights.iter_mut().zip(curr_window_noise) {
-                *w += self.mu * window_error * x;
-            }
+        for (w, x) in weights.iter_mut().zip(noise_window) {
+            *w += self.mu * *error * x;
         }
     }
 }
@@ -65,7 +57,8 @@ mod tests {
         let expected = [1.0, -1.0];
         let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
 
-        lms.update_step(&mut weights, &e_n, &x_n);
+        // TODO: replace w/ update_step()
+        lms.update_block(&mut weights, &e_n, &x_n);
 
         assert!(all_approx_equal(weights.iter(), expected.iter()));
     }
@@ -78,7 +71,8 @@ mod tests {
         let expected = [5.0, 2.0];
         let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
 
-        lms.update_step(&mut weights, &e_n, &x_n);
+        // TODO: replace w/ update_step()
+        lms.update_block(&mut weights, &e_n, &x_n);
 
         assert!(all_approx_equal(weights.iter(), expected.iter()));
     }
@@ -93,7 +87,7 @@ mod tests {
         let expected = [19.0, -28.0];
         let mut weights = FilterWeights::new(WindowSize::new(2).unwrap());
 
-        lms.update_step(&mut weights, &e_n, &x_n);
+        lms.update_block(&mut weights, &e_n, &x_n);
 
         assert!(all_approx_equal(weights.iter(), expected.iter()));
     }
@@ -108,7 +102,7 @@ mod tests {
         let expected = [7.5, -11.0, 14.5];
         let mut weights = FilterWeights::new(WindowSize::new(3).unwrap());
 
-        lms.update_step(&mut weights, &e_n, &x_n);
+        lms.update_block(&mut weights, &e_n, &x_n);
 
         assert!(all_approx_equal(weights.iter(), expected.iter()));
     }

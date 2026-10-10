@@ -104,7 +104,6 @@ impl<F: Float, A: Algorithm<F>> AdaptiveFilter<F> for FilterBase<F, A> {
         input_signal: &InputSignal<F>,
         noise_ref: &NoiseReference<F>,
     ) -> Result<Vec<F>> {
-        // TODO: check that signal length is >= block size?
         check_signal_lengths(input_signal, noise_ref)?;
 
         let mut noise_ref_buffer = BlockNoiseBuffer::new(&self.weights, self.block_size);
@@ -128,7 +127,7 @@ impl<F: Float, A: Algorithm<F>> AdaptiveFilter<F> for FilterBase<F, A> {
                 );
 
                 self.algorithm
-                    .update_step(&mut self.weights, &block_error, &noise_ref_buffer);
+                    .update_block(&mut self.weights, &block_error, &noise_ref_buffer);
             } else {
                 // last block: finish off remaining samples w/o updating the weights
                 process_block(
@@ -278,6 +277,7 @@ mod tests {
     use crate::algorithms::Lms;
     use crate::error::Error;
     use crate::test_utils::all_approx_equal;
+    use crate::types::signals::OutputSample;
 
     struct UpdateCallCounter {
         call_count: RefCell<usize>,
@@ -297,8 +297,8 @@ mod tests {
         fn update_step(
             &mut self,
             _weights: &mut FilterWeights<F>,
-            _error: &BlockError<F>,
-            _noise_ref: &BlockNoiseBuffer<F>,
+            _error: OutputSample<F>,
+            _noise_window: impl Iterator<Item = F>,
         ) {
             *self.call_count.borrow_mut() += 1;
         }
@@ -486,7 +486,7 @@ mod tests {
         let noise = NoiseReference::new(vec![4.0, 5.0, 6.0, 7.0]).unwrap();
 
         filter.adapt(&input, &noise).unwrap();
-        assert_eq!(filter.algorithm.call_count(), 2);
+        assert_eq!(filter.algorithm.call_count(), 2 * *block_size);
 
         filter.filter(&input, &noise).unwrap();
     }
@@ -508,7 +508,7 @@ mod tests {
 
         filter.adapt(&input, &noise).unwrap();
         // update not called on final block because the shapes don't match
-        assert_eq!(filter.algorithm.call_count(), 2);
+        assert_eq!(filter.algorithm.call_count(), 2 * *block_size);
 
         filter.filter(&input, &noise).unwrap();
     }
