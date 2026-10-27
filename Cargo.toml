@@ -52,6 +52,7 @@ error_impl_error = "allow" # naming errors just "Error" and using them as `some_
 pub_with_shorthand = "allow" # stylistic choice of the pub(crate) ... shorthand over pub(in crate)
 exhaustive_structs = "allow" # unlike with enums, exhaustive_structs are generally fine
 rest_pattern_accessible_field = "allow" # conflicts with unneeded_field_pattern
+module_name_repetitions = "allow" # ok as long as it's not too much
 
 # maybe
 missing_docs_in_private_items = "allow"

@@ -16,4 +16,6 @@ pub use float::Float;
 pub mod buffers;
 pub mod signals;
 
+pub(crate) mod matrix;
+
 // TODO: use pub(crate) to limit public exports to only the types needed for the public API
