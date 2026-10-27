@@ -1,27 +1,27 @@
 #![allow(dead_code, clippy::unwrap_used, reason = "TODO")]
 
-use std::marker::PhantomData;
-
 use crate::types::Float;
+use num_traits::Zero as _;
 
-pub trait MatrixOps<'a, F: Float> {
-    fn get_2d(&self, row: usize, col: usize) -> Option<&F>;
+// TODO: more tests
+
+pub trait MatrixOps<'a> {
+    type Item: Float;
+
+    fn get_2d(&self, row: usize, col: usize) -> Option<&Self::Item>;
     fn shape(&self) -> Shape;
 
-    fn transpose(&'a self) -> Transpose<'a, Self, F>
+    fn transpose(&'a self) -> Transpose<'a, Self>
     where
-        Self: Sized, // TODO: should the trait require Sized?
+        Self: Sized, // TODO: should the trait itself require Sized?
     {
-        Transpose {
-            matrix: self,
-            unused: PhantomData,
-        }
+        Transpose { matrix: self }
     }
 
     // TODO: replace Option with Result
-    fn matmul<'rhs, M>(&self, rhs: &M, out: &mut [F]) -> Option<()>
+    fn matmul<'rhs, M>(&self, rhs: &M, out: &mut [Self::Item]) -> Option<()>
     where
-        M: MatrixOps<'rhs, F>,
+        M: MatrixOps<'rhs, Item = Self::Item>,
     {
         if self.shape().cols != rhs.shape().rows {
             return None;
@@ -36,7 +36,7 @@ pub trait MatrixOps<'a, F: Float> {
         for i in 0..n_rows {
             #[allow(clippy::indexing_slicing, reason = "output shape validated")]
             for j in 0..n_cols {
-                out[i * n_cols + j] = F::zero();
+                out[i * n_cols + j] = Self::Item::zero();
             }
         }
 
@@ -56,17 +56,17 @@ pub trait MatrixOps<'a, F: Float> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Transpose<'a, M, F>
+pub struct Transpose<'a, M>
 where
-    M: MatrixOps<'a, F>,
-    F: Float,
+    M: MatrixOps<'a>,
 {
     matrix: &'a M,
-    unused: PhantomData<F>,
 }
 
-impl<'a, M: MatrixOps<'a, F>, F: Float> MatrixOps<'_, F> for Transpose<'a, M, F> {
-    fn get_2d(&self, row: usize, col: usize) -> Option<&F> {
+impl<'a, M: MatrixOps<'a>> MatrixOps<'_> for Transpose<'a, M> {
+    type Item = M::Item;
+
+    fn get_2d(&self, row: usize, col: usize) -> Option<&Self::Item> {
         self.matrix.get_2d(col, row)
     }
 
@@ -97,7 +97,9 @@ impl<F: Float> Matrix<F> {
         }
     }
 }
-impl<F: Float> MatrixOps<'_, F> for Matrix<F> {
+impl<F: Float> MatrixOps<'_> for Matrix<F> {
+    type Item = F;
+
     fn get_2d(&self, row: usize, col: usize) -> Option<&F> {
         self.inner.get(row * self.shape.cols + col)
     }
@@ -118,6 +120,7 @@ mod tests {
         mat.inner = (1..=6).into_iter().map(f64::from).collect();
         mat
     }
+
     #[test]
     fn get_2d_works() {
         let mat = matrix();
