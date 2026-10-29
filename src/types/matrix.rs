@@ -1,5 +1,7 @@
 #![allow(dead_code, reason = "TODO")]
 
+use std::ops::{Deref, DerefMut};
+
 use crate::types::Float;
 use num_traits::Zero as _;
 
@@ -17,7 +19,7 @@ pub trait MatrixOps<'a> {
     }
 
     // TODO: replace Option with Result
-    fn matmul<'rhs, M>(&self, rhs: &M, out: &mut [Self::Item]) -> Option<()>
+    fn matmul<'rhs, M>(&'a self, rhs: &M, out: &mut [Self::Item]) -> Option<()>
     where
         M: MatrixOps<'rhs, Item = Self::Item>,
     {
@@ -51,6 +53,10 @@ pub trait MatrixOps<'a> {
 
         Some(())
     }
+}
+
+pub trait MatrixOpsMut<'a>: MatrixOps<'a> {
+    fn get_2d_mut(&'a mut self, row: usize, col: usize) -> Option<&'a mut Self::Item>;
 }
 
 #[derive(Debug, Clone)]
@@ -99,7 +105,7 @@ impl Shape {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Matrix<F: Float> {
     inner: Box<[F]>,
     shape: Shape,
@@ -110,6 +116,27 @@ impl<F: Float> Matrix<F> {
             inner: vec![F::zero(); shape.rows * shape.cols].into_boxed_slice(),
             shape,
         }
+    }
+
+    pub fn from_slice(arr: &[F], shape: Shape) -> Option<Self> {
+        // if arr.len() == shape.rows * shape.cols {
+        //     Some(Self {
+        //         inner: arr.to_vec().into_boxed_slice(),
+        //         shape,
+        //     })
+        // } else {
+        //     None
+        // }
+
+        (arr.len() == shape.rows * shape.cols).then(|| Self {
+            inner: arr.to_vec().into_boxed_slice(),
+            shape,
+        })
+    }
+
+    #[cfg(test)]
+    pub fn inner(&self) -> &[F] {
+        &self.inner
     }
 }
 impl<F: Float> MatrixOps<'_> for Matrix<F> {
@@ -125,6 +152,29 @@ impl<F: Float> MatrixOps<'_> for Matrix<F> {
 
     fn shape(&self) -> Shape {
         self.shape
+    }
+}
+impl<'a, F: Float> MatrixOpsMut<'a> for Matrix<F> {
+    fn get_2d_mut(&'a mut self, row: usize, col: usize) -> Option<&'a mut Self::Item> {
+        if row >= self.shape.rows || col >= self.shape.cols {
+            None
+        } else {
+            self.inner.get_mut(row * self.shape.cols + col)
+        }
+    }
+}
+// TODO: matmul's out param should really impl MatrixOpsMut, but the lifetimes for that are weird,
+// so this is a temporary workaround
+impl<F: Float> Deref for Matrix<F> {
+    type Target = [F];
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+impl<F: Float> DerefMut for Matrix<F> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 

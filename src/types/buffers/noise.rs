@@ -2,6 +2,7 @@ use std::num::NonZero;
 use std::ops::{Deref, DerefMut};
 
 use super::SampleBuffer;
+use crate::types::matrix::{MatrixOps, Shape};
 use crate::types::{BlockSize, FilterWeights, Float, WindowSize};
 
 pub struct NoiseBuffer<F: Float> {
@@ -104,6 +105,19 @@ impl<F: Float> NoiseWindow<'_, F> {
             .copied()
             .skip(self.start_idx)
             .take(*self.buffer.window_size)
+    }
+}
+impl<F: Float> MatrixOps<'_> for NoiseWindow<'_, F> {
+    type Item = F;
+
+    fn get_2d(&self, row: usize, col: usize) -> Option<&Self::Item> {
+        // We treat NoiseWindow as a column vector to match mathematical notation,
+        // especially with regards to transposing.
+        if col > 0 { None } else { self.get(row) }
+    }
+
+    fn shape(&self) -> Shape {
+        Shape::new(*self.buffer.window_size, 1).expect("window_size >= 1")
     }
 }
 

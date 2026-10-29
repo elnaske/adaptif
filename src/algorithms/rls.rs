@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::types::buffers::NoiseWindow;
+use crate::types::matrix::{Matrix, MatrixOps as _, MatrixOpsMut as _, Shape};
 use crate::types::signals::OutputSample;
 use crate::types::{FilterWeights, Float, WindowSize};
 use crate::{Error, Result};
@@ -52,7 +53,8 @@ impl<F: Float> Algorithm<F> for Rls<F> {
         // Updates p_matrix on first iteration once n is known
         // No scenario where one is initialized and the other isn't
         // TODO: remove once proper init is implemented
-        if self.inverse_corr_matrix.is_empty() {
+        // if self.inverse_corr_matrix.is_empty() {
+        if self.inverse_corr_matrix.shape().rows() != *weights.window_size() {
             self.inverse_corr_matrix =
                 InverseCorrMatrix::new(weights.window_size(), self.p_init_scale);
             self.kalman_gain = KalmanGain::new(weights.window_size());
@@ -73,6 +75,7 @@ impl<F: Float> Rls<F> {
     ///
     /// Returns an error if forgetting factor <= 0.0 or > 1.0.
     /// Returns an error if init scale <= 0.0.
+    #[allow(clippy::missing_panics_doc, reason = "TODO")]
     pub fn new(forgetting_factor: F, p_init_scale: F) -> Result<Self> {
         if forgetting_factor <= F::zero() || forgetting_factor > F::one() {
             return Err(Error::InvalidForgettingFactorRange);
@@ -84,11 +87,17 @@ impl<F: Float> Rls<F> {
         Ok(Rls {
             forgetting_factor,
             p_init_scale,
+            // inverse_corr_matrix: InverseCorrMatrix {
+            //     inner: vec![].into_boxed_slice(),
+            // },
+            // kalman_gain: KalmanGain {
+            //     inner: vec![].into_boxed_slice(),
+            // },
             inverse_corr_matrix: InverseCorrMatrix {
-                inner: vec![].into_boxed_slice(),
+                inner: Matrix::new(Shape::new(1, 1).expect("TODO")),
             },
             kalman_gain: KalmanGain {
-                inner: vec![].into_boxed_slice(),
+                inner: Matrix::new(Shape::new(1, 1).expect("TODO")),
             },
         })
     }
@@ -102,30 +111,28 @@ impl<F: Float> Rls<F> {
     ///
     /// Existing Kalman gain buffer gets reused to store the numerator
     /// value in update calculation to avoid reallocating a new vector.
+    // TODO: make method on KalmanGain
     fn update_kalman_gain(&mut self, noise_ref: &NoiseWindow<F>) {
-        // reusing kalman buffer for getting numerator to avoid clone of numerator
-        for (k_i, row) in self
-            .kalman_gain
-            .iter_mut()
-            .zip(self.inverse_corr_matrix.chunks_exact(noise_ref.len()))
-        {
-            *k_i = row
-                .iter()
-                .copied()
-                .zip(noise_ref.iter())
-                .map(|(px, x)| px * x)
-                .sum::<F>();
-        }
+        // We reuse the kalman gain buffer to store the numerator
+        // to avoid an extra allocation for the output parameter of the matmul.
+        self.inverse_corr_matrix
+            .matmul(noise_ref, &mut self.kalman_gain)
+            .expect("lhs' dims are [window_size, window_size], rhs' are [window_size, 1]");
 
-        let denominator = self.forgetting_factor
-            + noise_ref
-                .iter()
-                .zip(self.kalman_gain.iter().copied())
-                .map(|(noise, num)| noise * num)
-                .sum::<F>();
+        let mut xt_p_x = [F::zero()];
 
-        for k_i in self.kalman_gain.iter_mut() {
-            *k_i /= denominator;
+        // TODO: replace w/ dot product (return scalar instead of using out buffer)
+        noise_ref
+            .transpose()
+            .matmul(&self.kalman_gain.inner, &mut xt_p_x)
+            .expect("lhs' dims are [1, window_size], rhs' are [window_size, 1]");
+
+        let denominator = self.forgetting_factor + xt_p_x[0];
+
+        // TODO: impl div by float for Matrix
+        #[allow(clippy::missing_panics_doc, reason = "TODO")]
+        for r in 0..self.kalman_gain.shape().rows() {
+            *self.kalman_gain.get_2d_mut(r, 0).expect("") /= denominator;
         }
     }
 
@@ -138,6 +145,7 @@ impl<F: Float> Rls<F> {
     /// \left(P_{n-1} - ``k_n`` ``x_n^T`` P_{n-1}\right)$.
     ///
     /// The matrix is stored as a flat buffer and updated in place.
+    // TODO: make method on InverseCorrMatrix
     fn update_p_matrix(&mut self, noise_ref: &NoiseWindow<F>) {
         // We calculate [x^T_n p_{n-1}] by computing the dot product of
         // ``noise_ref`` with each columnn in ``inverse_corr_matrix``
@@ -153,11 +161,11 @@ impl<F: Float> Rls<F> {
             // takes result^ and computes lambda^-1 * [p_{n-1} - k(xt_p column)]
             for (row, k_i) in self.kalman_gain.iter().copied().enumerate() {
                 // index is into a flat buffer, so row * n gives us the start of each row
-                let index = row * noise_ref.len() + col;
+                // let index = row * noise_ref.len() + col;
 
                 let p_i = self
                     .inverse_corr_matrix
-                    .get_mut(index)
+                    .get_2d_mut(row, col)
                     // TODO(ben): How is this enforced?
                     .expect("Index should always be valid based on the type invariants");
                 *p_i = (*p_i - k_i * xt_p_col) / self.forgetting_factor;
@@ -169,17 +177,17 @@ impl<F: Float> Rls<F> {
 #[derive(Debug, Clone, PartialEq)]
 /// M-dimensional vector of Kalman gains, where M is the filter's window size.
 struct KalmanGain<F: Float> {
-    inner: Box<[F]>,
+    inner: Matrix<F>,
 }
 impl<F: Float> KalmanGain<F> {
     pub fn new(window_size: WindowSize) -> Self {
         KalmanGain {
-            inner: vec![F::zero(); *window_size].into_boxed_slice(),
+            inner: Matrix::new(Shape::new(*window_size, 1).expect("window_size >= 1")),
         }
     }
 }
 impl<F: Float> Deref for KalmanGain<F> {
-    type Target = [F];
+    type Target = Matrix<F>;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
@@ -194,7 +202,7 @@ impl<F: Float> DerefMut for KalmanGain<F> {
 #[derive(Debug, Clone, PartialEq)]
 /// Inverse Correlation Matrix with shape M * M, where M is the filter's window size.
 struct InverseCorrMatrix<F: Float> {
-    inner: Box<[F]>,
+    inner: Matrix<F>,
 }
 impl<F: Float> InverseCorrMatrix<F> {
     /// Creates an M x M-dimensional Identity matrix multiplied by a positive scalar `p_init_scale`.
@@ -203,18 +211,22 @@ impl<F: Float> InverseCorrMatrix<F> {
     ///
     /// Serves as inverse correlation matrix in RLS algorithm, where M is the filter's window size.
     pub fn new(window_size: WindowSize, p_init_scale: F) -> Self {
-        let mut p = vec![F::zero(); (*window_size) * (*window_size)].into_boxed_slice();
+        let mut p = Matrix::new(
+            Shape::new(*window_size, *window_size)
+                .expect("WindowSize type ensures window_size >= 1"),
+        );
 
         for i in 0..(*window_size) {
-            if let Some(elem) = p.get_mut(i * (*window_size) + i) {
+            if let Some(elem) = p.get_2d_mut(i, i) {
                 *elem = p_init_scale;
             }
         }
+
         InverseCorrMatrix { inner: p }
     }
 }
 impl<F: Float> Deref for InverseCorrMatrix<F> {
-    type Target = [F];
+    type Target = Matrix<F>;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
@@ -240,7 +252,11 @@ mod tests {
         let n = WindowSize::new(3).unwrap();
         let p_matrix = InverseCorrMatrix::new(n, 10.0);
 
-        let expected = [10.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 10.0];
+        let expected = Matrix::from_slice(
+            &[10.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 10.0],
+            Shape::new(3, 3).unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(*p_matrix, expected);
     }
@@ -249,10 +265,10 @@ mod tests {
     fn update_kalman_gain_works() {
         let mut rls = Rls::new(1.0, 1.0).unwrap();
         rls.inverse_corr_matrix = InverseCorrMatrix {
-            inner: vec![1.0, 0.0, 0.0, 1.0].into_boxed_slice(),
+            inner: Matrix::from_slice(&[1.0, 0.0, 0.0, 1.0], Shape::new(2, 2).unwrap()).unwrap(),
         };
         rls.kalman_gain = KalmanGain {
-            inner: vec![0.0; 2].into_boxed_slice(),
+            inner: Matrix::new(Shape::new(2, 1).unwrap()),
         };
         let x_n = block_noise_buffer_from(
             &[1.0, 2.0],
@@ -264,17 +280,20 @@ mod tests {
 
         let expected = [1.0 / 6.0, 1.0 / 3.0];
 
-        assert!(all_approx_equal(rls.kalman_gain.iter(), expected.iter()));
+        assert!(all_approx_equal(
+            rls.kalman_gain.inner().iter(),
+            expected.iter()
+        ));
     }
 
     #[test]
     fn update_p_matrix_works() {
         let mut rls = Rls::new(1.0, 1.0).unwrap();
         rls.inverse_corr_matrix = InverseCorrMatrix {
-            inner: vec![1.0, 0.0, 0.0, 1.0].into_boxed_slice(),
+            inner: Matrix::from_slice(&[1.0, 0.0, 0.0, 1.0], Shape::new(2, 2).unwrap()).unwrap(),
         };
         rls.kalman_gain = KalmanGain {
-            inner: vec![1.0 / 6.0, 1.0 / 3.0].into_boxed_slice(),
+            inner: Matrix::from_slice(&[1.0 / 6.0, 1.0 / 3.0], Shape::new(2, 1).unwrap()).unwrap(),
         };
         let x_n = block_noise_buffer_from(
             &[1.0, 2.0],
@@ -285,12 +304,16 @@ mod tests {
         rls.update_p_matrix(&x_n.get_window(0).unwrap());
 
         let expected = InverseCorrMatrix {
-            inner: vec![5.0 / 6.0, -1.0 / 3.0, -1.0 / 3.0, 1.0 / 3.0].into_boxed_slice(),
+            inner: Matrix::from_slice(
+                &[5.0 / 6.0, -1.0 / 3.0, -1.0 / 3.0, 1.0 / 3.0],
+                Shape::new(2, 2).unwrap(),
+            )
+            .unwrap(),
         };
 
         assert!(all_approx_equal(
-            rls.inverse_corr_matrix.iter(),
-            expected.iter()
+            rls.inverse_corr_matrix.inner().iter(),
+            expected.inner().iter()
         ));
     }
 
