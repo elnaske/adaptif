@@ -135,8 +135,14 @@ impl<F: Float, A: Algorithm<F>> FilterBase<F, A> {
                     &mut cleaned_signal,
                 );
 
-                // TODO: try to find a solution so that update_step() _can_ be called here
-                // We intentionally don't call update_step() here:
+                // TODO(elias): try to find a solution so that `update_block()` _can_ be called here
+                // One way would be to add a `block_size` arg to `update_block()` and use
+                // `error.iter().take(block_size)` to only process the k=block_size most recent samples.
+                // Then for the last block we pass in `n_samples - block_start` to only process the
+                // samples for the current block, even though the buffer still contains ones from
+                // previous samples
+
+                // We intentionally don't call update_block() here:
                 //
                 // Using a fixed-size buffer for the noise reference instead of
                 // constructing the full noise matrix X_n is efficient, but it also
