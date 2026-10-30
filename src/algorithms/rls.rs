@@ -60,13 +60,18 @@ impl<F: Float> Algorithm<F> for Rls<F> {
             self.kalman_gain = KalmanGain::new(weights.window_size());
         }
 
-        self.update_kalman_gain(&noise_window);
+        self.kalman_gain.update(
+            &self.inverse_corr_matrix,
+            &noise_window,
+            self.forgetting_factor,
+        );
 
         for (w, k) in weights.iter_mut().zip(self.kalman_gain.iter().copied()) {
             *w += k * (*error);
         }
 
-        self.update_p_matrix(&noise_window);
+        self.inverse_corr_matrix
+            .update(&self.kalman_gain, &noise_window, self.forgetting_factor);
     }
 }
 
@@ -95,73 +100,6 @@ impl<F: Float> Rls<F> {
             },
         })
     }
-
-    /// Updates the Kalman gain vector used in the RLS weight update.
-    ///
-    /// Kalman gain vector update calculated as:
-    ///
-    /// $``k_n`` = \frac{P_{n-1} ``x_n``}
-    /// {\lambda + ``x_n^T`` P_{n-1} ``x_n``}$.
-    ///
-    /// Existing Kalman gain buffer gets reused to store the numerator
-    /// value in update calculation to avoid reallocating a new vector.
-    // TODO: make method on KalmanGain
-    fn update_kalman_gain(&mut self, noise_ref: &NoiseWindow<F>) {
-        // We reuse the kalman gain buffer to store the numerator
-        // to avoid an extra allocation for the output parameter of the matmul.
-        self.inverse_corr_matrix
-            .matmul(noise_ref, &mut self.kalman_gain)
-            .expect("[window_size, window_size] @ [window_size, 1] -> [window_size, 1]");
-
-        let xt_p_x = self
-            .kalman_gain
-            .iter()
-            .zip(noise_ref.iter())
-            .map(|(p, x)| *p * x)
-            .sum();
-
-        self.kalman_gain.inner /= self.forgetting_factor + xt_p_x;
-    }
-
-    /// Updates the inverse correlation matrix used in the RLS weight update.
-    /// Utilizes current Kalman gain ``k_n``.
-    ///
-    /// Inverse correlation matrix update calculated as:
-    ///
-    /// $``P_n`` = \frac{1}{\lambda}
-    /// \left(P_{n-1} - ``k_n`` ``x_n^T`` P_{n-1}\right)$.
-    ///
-    /// The matrix is stored as a flat buffer and updated in place.
-    // TODO: make method on InverseCorrMatrix
-    fn update_p_matrix(&mut self, noise_ref: &NoiseWindow<F>) {
-        // We calculate [x^T_n p_{n-1}] by computing the dot product of
-        // ``noise_ref`` with each columnn in ``inverse_corr_matrix``
-        //
-        // NOTE(elias): tried using MatrixOps::matmul() for this and
-        // execution time for RLS literally doubled. This is likely because
-        // we couldn't modify P in place, so we have a bunch of extra calculations
-        // that we need to carry out and store, whereas the approach below
-        // simplifies the overall computation greatly.
-        for col in 0..noise_ref.len() {
-            let p_col = self
-                .inverse_corr_matrix
-                .iter()
-                .copied()
-                .skip(col)
-                .step_by(noise_ref.len());
-            let xt_p_col = noise_ref.iter().zip(p_col).map(|(x, p)| x * p).sum::<F>();
-
-            // takes result^ and computes lambda^-1 * [p_{n-1} - k(xt_p column)]
-            for (row, k_i) in self.kalman_gain.iter().copied().enumerate() {
-                let p_i = self
-                    .inverse_corr_matrix
-                    .get_2d_mut(row, col)
-                    // TODO(ben): How is this enforced?
-                    .expect("Index should always be valid based on the type invariants");
-                *p_i = (*p_i - k_i * xt_p_col) / self.forgetting_factor;
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -174,6 +112,32 @@ impl<F: Float> KalmanGain<F> {
         KalmanGain {
             inner: Matrix::new(Shape::new(*window_size, 1).expect("window_size >= 1")),
         }
+    }
+
+    /// Updates the Kalman gain vector used in the RLS weight update.
+    ///
+    /// Kalman gain vector update calculated as:
+    ///
+    /// $``k_n`` = \frac{P_{n-1} ``x_n``}
+    /// {\lambda + ``x_n^T`` P_{n-1} ``x_n``}$.
+    ///
+    /// Existing Kalman gain buffer gets reused to store the numerator
+    /// value in update calculation to avoid reallocating a new vector.
+    pub fn update(
+        &mut self,
+        inverse_corr_matrix: &InverseCorrMatrix<F>,
+        noise_ref: &NoiseWindow<F>,
+        lambda: F,
+    ) {
+        // We reuse the kalman gain buffer to store the numerator
+        // to avoid an extra allocation for the output parameter of the matmul.
+        inverse_corr_matrix
+            .matmul(noise_ref, self)
+            .expect("[window_size, window_size] @ [window_size, 1] -> [window_size, 1]");
+
+        let xt_p_x = self.iter().zip(noise_ref.iter()).map(|(p, x)| *p * x).sum();
+
+        self.inner /= lambda + xt_p_x;
     }
 }
 impl<F: Float> Deref for KalmanGain<F> {
@@ -214,6 +178,39 @@ impl<F: Float> InverseCorrMatrix<F> {
 
         InverseCorrMatrix { inner: p }
     }
+
+    /// Updates the inverse correlation matrix used in the RLS weight update.
+    /// Utilizes current Kalman gain ``k_n``.
+    ///
+    /// Inverse correlation matrix update calculated as:
+    ///
+    /// $``P_n`` = \frac{1}{\lambda}
+    /// \left(P_{n-1} - ``k_n`` ``x_n^T`` P_{n-1}\right)$.
+    ///
+    /// The matrix is stored as a flat buffer and updated in place.
+    fn update(&mut self, kalman_gain: &KalmanGain<F>, noise_ref: &NoiseWindow<F>, lambda: F) {
+        // We calculate [x^T_n p_{n-1}] by computing the dot product of
+        // ``noise_ref`` with each columnn in ``inverse_corr_matrix``
+        //
+        // NOTE(elias): tried using MatrixOps::matmul() for this and
+        // execution time for RLS literally doubled. This is likely because
+        // we couldn't modify P in place, so we have a bunch of extra calculations
+        // that we need to carry out and store, whereas the approach below
+        // simplifies the overall computation greatly.
+        for col in 0..noise_ref.len() {
+            let p_col = self.iter().copied().skip(col).step_by(noise_ref.len());
+            let xt_p_col = noise_ref.iter().zip(p_col).map(|(x, p)| x * p).sum::<F>();
+
+            // takes result^ and computes lambda^-1 * [p_{n-1} - k(xt_p column)]
+            for (row, k_i) in kalman_gain.iter().copied().enumerate() {
+                let p_i = self
+                    .get_2d_mut(row, col)
+                    // TODO(ben): How is this enforced?
+                    .expect("Index should always be valid based on the type invariants");
+                *p_i = (*p_i - k_i * xt_p_col) / lambda;
+            }
+        }
+    }
 }
 impl<F: Float> Deref for InverseCorrMatrix<F> {
     type Target = Matrix<F>;
@@ -253,12 +250,11 @@ mod tests {
 
     #[test]
     fn update_kalman_gain_works() {
-        let mut rls = Rls::new(1.0, 1.0).unwrap();
-        rls.inverse_corr_matrix = InverseCorrMatrix {
-            inner: Matrix::from_slice(&[1.0, 0.0, 0.0, 1.0], Shape::new(2, 2).unwrap()).unwrap(),
-        };
-        rls.kalman_gain = KalmanGain {
+        let mut k = KalmanGain {
             inner: Matrix::new(Shape::new(2, 1).unwrap()),
+        };
+        let p = InverseCorrMatrix {
+            inner: Matrix::from_slice(&[1.0, 0.0, 0.0, 1.0], Shape::new(2, 2).unwrap()).unwrap(),
         };
         let x_n = block_noise_buffer_from(
             &[1.0, 2.0],
@@ -266,23 +262,19 @@ mod tests {
             BlockSize::new(1).unwrap(),
         );
 
-        rls.update_kalman_gain(&x_n.get_window(0).unwrap());
+        k.update(&p, &x_n.get_window(0).unwrap(), 1.0);
 
         let expected = [1.0 / 6.0, 1.0 / 3.0];
 
-        assert!(all_approx_equal(
-            rls.kalman_gain.inner().iter(),
-            expected.iter()
-        ));
+        assert!(all_approx_equal(k.inner().iter(), expected.iter()));
     }
 
     #[test]
     fn update_p_matrix_works() {
-        let mut rls = Rls::new(1.0, 1.0).unwrap();
-        rls.inverse_corr_matrix = InverseCorrMatrix {
+        let mut p = InverseCorrMatrix {
             inner: Matrix::from_slice(&[1.0, 0.0, 0.0, 1.0], Shape::new(2, 2).unwrap()).unwrap(),
         };
-        rls.kalman_gain = KalmanGain {
+        let k = KalmanGain {
             inner: Matrix::from_slice(&[1.0 / 6.0, 1.0 / 3.0], Shape::new(2, 1).unwrap()).unwrap(),
         };
 
@@ -292,7 +284,7 @@ mod tests {
             BlockSize::new(1).unwrap(),
         );
 
-        rls.update_p_matrix(&x_n.get_window(0).unwrap());
+        p.update(&k, &x_n.get_window(0).unwrap(), 1.0);
 
         let expected = InverseCorrMatrix {
             inner: Matrix::from_slice(
@@ -302,10 +294,7 @@ mod tests {
             .unwrap(),
         };
 
-        assert!(all_approx_equal(
-            rls.inverse_corr_matrix.inner().iter(),
-            expected.inner().iter()
-        ));
+        assert!(all_approx_equal(p.inner().iter(), expected.inner().iter()));
     }
 
     #[test]
