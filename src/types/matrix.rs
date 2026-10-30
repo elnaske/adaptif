@@ -1,6 +1,6 @@
 #![allow(dead_code, reason = "TODO")]
 
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, DivAssign, Index, IndexMut};
 
 use crate::types::Float;
 use num_traits::Zero as _;
@@ -13,7 +13,7 @@ pub trait MatrixOps<'a> {
 
     fn transpose(&'a self) -> Transpose<'a, Self>
     where
-        Self: Sized, // TODO: should the trait itself require Sized?
+        Self: Sized,
     {
         Transpose { matrix: self }
     }
@@ -31,14 +31,9 @@ pub trait MatrixOps<'a> {
             return None;
         }
 
-        let (n_rows, inner, n_cols) = (self.shape().rows, self.shape().cols, rhs.shape().cols);
+        out.fill(Self::Item::zero());
 
-        for i in 0..n_rows {
-            #[allow(clippy::indexing_slicing, reason = "output shape validated")]
-            for j in 0..n_cols {
-                out[i * n_cols + j] = Self::Item::zero();
-            }
-        }
+        let (n_rows, inner, n_cols) = (self.shape().rows, self.shape().cols, rhs.shape().cols);
 
         for i in 0..n_rows {
             for k in 0..inner {
@@ -56,7 +51,29 @@ pub trait MatrixOps<'a> {
 }
 
 pub trait MatrixOpsMut<'a>: MatrixOps<'a> {
-    fn get_2d_mut(&'a mut self, row: usize, col: usize) -> Option<&'a mut Self::Item>;
+    fn get_2d_mut(&mut self, row: usize, col: usize) -> Option<&mut Self::Item>;
+
+    /// In place element-wise subtraction with another matrix.
+    ///
+    /// Note that we can't use ``Sub`` or ``SubAssign`` for this because the dimensions
+    /// of the two matrices have to match, so we need to return a Result or Option,
+    /// which ``Sub::sub()`` doesn't.
+    fn sub<'rhs, M>(&mut self, rhs: &M) -> Option<()>
+    where
+        M: MatrixOps<'rhs, Item = Self::Item>,
+    {
+        if self.shape() == rhs.shape() {
+            let shape = self.shape();
+            for row in 0..shape.rows {
+                for col in 0..shape.cols {
+                    *self.get_2d_mut(row, col)? -= *rhs.get_2d(row, col)?;
+                }
+            }
+            Some(())
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -154,8 +171,8 @@ impl<F: Float> MatrixOps<'_> for Matrix<F> {
         self.shape
     }
 }
-impl<'a, F: Float> MatrixOpsMut<'a> for Matrix<F> {
-    fn get_2d_mut(&'a mut self, row: usize, col: usize) -> Option<&'a mut Self::Item> {
+impl<F: Float> MatrixOpsMut<'_> for Matrix<F> {
+    fn get_2d_mut(&mut self, row: usize, col: usize) -> Option<&mut Self::Item> {
         if row >= self.shape.rows || col >= self.shape.cols {
             None
         } else {
@@ -163,6 +180,15 @@ impl<'a, F: Float> MatrixOpsMut<'a> for Matrix<F> {
         }
     }
 }
+impl<F: Float> DivAssign<F> for Matrix<F> {
+    fn div_assign(&mut self, rhs: F) {
+        #[allow(clippy::indexing_slicing, reason = "i < self.inner.len()")]
+        for i in 0..self.inner.len() {
+            self.inner[i] /= rhs;
+        }
+    }
+}
+
 // TODO: matmul's out param should really impl MatrixOpsMut, but the lifetimes for that are weird,
 // so this is a temporary workaround
 impl<F: Float> Deref for Matrix<F> {
@@ -177,6 +203,23 @@ impl<F: Float> DerefMut for Matrix<F> {
         &mut self.inner
     }
 }
+impl<F: Float> Index<MatIdx> for Matrix<F> {
+    type Output = F;
+
+    #[allow(clippy::indexing_slicing, reason = "Indexing should panic OOB")]
+    fn index(&self, index: MatIdx) -> &Self::Output {
+        &self.inner[index.0 * self.shape.cols + index.1]
+    }
+}
+impl<F: Float> IndexMut<MatIdx> for Matrix<F> {
+    #[allow(clippy::indexing_slicing, reason = "Indexing should panic OOB")]
+    fn index_mut(&mut self, index: MatIdx) -> &mut Self::Output {
+        &mut self.inner[index.0 * self.shape.cols + index.1]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MatIdx(pub usize, pub usize);
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::indexing_slicing, reason = "Tests")]

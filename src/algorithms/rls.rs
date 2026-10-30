@@ -87,12 +87,6 @@ impl<F: Float> Rls<F> {
         Ok(Rls {
             forgetting_factor,
             p_init_scale,
-            // inverse_corr_matrix: InverseCorrMatrix {
-            //     inner: vec![].into_boxed_slice(),
-            // },
-            // kalman_gain: KalmanGain {
-            //     inner: vec![].into_boxed_slice(),
-            // },
             inverse_corr_matrix: InverseCorrMatrix {
                 inner: Matrix::new(Shape::new(1, 1).expect("TODO")),
             },
@@ -117,23 +111,16 @@ impl<F: Float> Rls<F> {
         // to avoid an extra allocation for the output parameter of the matmul.
         self.inverse_corr_matrix
             .matmul(noise_ref, &mut self.kalman_gain)
-            .expect("lhs' dims are [window_size, window_size], rhs' are [window_size, 1]");
+            .expect("[window_size, window_size] @ [window_size, 1] -> [window_size, 1]");
 
-        let mut xt_p_x = [F::zero()];
+        let xt_p_x = self
+            .kalman_gain
+            .iter()
+            .zip(noise_ref.iter())
+            .map(|(p, x)| *p * x)
+            .sum();
 
-        // TODO: replace w/ dot product (return scalar instead of using out buffer)
-        noise_ref
-            .transpose()
-            .matmul(&self.kalman_gain.inner, &mut xt_p_x)
-            .expect("lhs' dims are [1, window_size], rhs' are [window_size, 1]");
-
-        let denominator = self.forgetting_factor + xt_p_x[0];
-
-        // TODO: impl div by float for Matrix
-        #[allow(clippy::missing_panics_doc, reason = "TODO")]
-        for r in 0..self.kalman_gain.shape().rows() {
-            *self.kalman_gain.get_2d_mut(r, 0).expect("") /= denominator;
-        }
+        self.kalman_gain.inner /= self.forgetting_factor + xt_p_x;
     }
 
     /// Updates the inverse correlation matrix used in the RLS weight update.
@@ -149,6 +136,12 @@ impl<F: Float> Rls<F> {
     fn update_p_matrix(&mut self, noise_ref: &NoiseWindow<F>) {
         // We calculate [x^T_n p_{n-1}] by computing the dot product of
         // ``noise_ref`` with each columnn in ``inverse_corr_matrix``
+        //
+        // NOTE(elias): tried using MatrixOps::matmul() for this and
+        // execution time for RLS literally doubled. This is likely because
+        // we couldn't modify P in place, so we have a bunch of extra calculations
+        // that we need to carry out and store, whereas the approach below
+        // simplifies the overall computation greatly.
         for col in 0..noise_ref.len() {
             let p_col = self
                 .inverse_corr_matrix
@@ -160,9 +153,6 @@ impl<F: Float> Rls<F> {
 
             // takes result^ and computes lambda^-1 * [p_{n-1} - k(xt_p column)]
             for (row, k_i) in self.kalman_gain.iter().copied().enumerate() {
-                // index is into a flat buffer, so row * n gives us the start of each row
-                // let index = row * noise_ref.len() + col;
-
                 let p_i = self
                     .inverse_corr_matrix
                     .get_2d_mut(row, col)
@@ -295,6 +285,7 @@ mod tests {
         rls.kalman_gain = KalmanGain {
             inner: Matrix::from_slice(&[1.0 / 6.0, 1.0 / 3.0], Shape::new(2, 1).unwrap()).unwrap(),
         };
+
         let x_n = block_noise_buffer_from(
             &[1.0, 2.0],
             WindowSize::new(2).unwrap(),
