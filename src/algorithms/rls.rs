@@ -135,7 +135,12 @@ impl<F: Float> KalmanGain<F> {
             .matmul(noise_ref, self)
             .expect("[window_size, window_size] @ [window_size, 1] -> [window_size, 1]");
 
-        let xt_p_x = self.iter().zip(noise_ref.iter()).map(|(p, x)| *p * x).sum();
+        let xt_p_x = self
+            .iter()
+            .copied()
+            .zip(noise_ref.iter())
+            .map(|(p, x)| p * x)
+            .sum();
 
         self.inner /= lambda + xt_p_x;
     }
@@ -189,19 +194,21 @@ impl<F: Float> InverseCorrMatrix<F> {
     ///
     /// The matrix is stored as a flat buffer and updated in place.
     fn update(&mut self, kalman_gain: &KalmanGain<F>, noise_ref: &NoiseWindow<F>, lambda: F) {
-        // We calculate [x^T_n p_{n-1}] by computing the dot product of
-        // ``noise_ref`` with each columnn in ``inverse_corr_matrix``
-        //
         // NOTE(elias): tried using MatrixOps::matmul() for this and
         // execution time for RLS literally doubled. This is likely because
         // we couldn't modify P in place, so we have a bunch of extra calculations
         // that we need to carry out and store, whereas the approach below
         // simplifies the overall computation greatly.
-        for col in 0..noise_ref.len() {
-            let p_col = self.iter().copied().skip(col).step_by(noise_ref.len());
-            let xt_p_col = noise_ref.iter().zip(p_col).map(|(x, p)| x * p).sum::<F>();
 
-            // takes result^ and computes lambda^-1 * [p_{n-1} - k(xt_p column)]
+        // We calculate [x^T P] by computing the dot product of
+        // noise_ref (x) with each column in inverse_corr_matrix (P),
+        // then update the values for that column in place.
+        for col in 0..noise_ref.len() {
+            // Iterate over each column in P and take its dot product with x.
+            let p_col = self.iter().copied().skip(col).step_by(noise_ref.len());
+            let xt_p_col = noise_ref.iter().zip(p_col).map(|(x, p)| x * p).sum();
+
+            // Update the values in that column in place
             for (row, k_i) in kalman_gain.iter().copied().enumerate() {
                 let p_i = self
                     .get_2d_mut(row, col)
