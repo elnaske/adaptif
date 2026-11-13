@@ -4,9 +4,9 @@ use crate::error::{Error, Result};
 use crate::types::Float;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-/// Noise reference signal that the filter adapts to.
+/// Reference noise signal that the filter adapts to.
 ///
-/// In mathematical notation, this signal is commonly represented as TODO.
+/// In mathematical notation, this signal is commonly represented as $x(n)$.
 pub struct NoiseReference<F: Float> {
     samples: Vec<F>,
 }

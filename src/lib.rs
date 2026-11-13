@@ -1,7 +1,9 @@
 //! This crate implements several adaptive filters for digital signal processing.
+//!
 //! Unlike a regular filter, which is the same for every input signal, an adaptive
 //! filter updates its inner state to the input signal(s) using a cost function,
-//! in this thus able to adapt over time.
+//! and is thus able to adapt over time.
+//!
 //! An example application is Adaptive Noise Cancellation (ANC), where an adaptive
 //! filter is used to remove noise from an audio signal by adapting to a reference
 //! noise signal.
@@ -9,9 +11,9 @@
 //! # Overview
 //!
 //! Currently, the following filters are available:
-//! - [`filters::LmsFilter`], which uses a [least mean squares] algorithm
-//! - [`filters::NlmsFilter`], which uses a [normalized least mean squares] algorithm
-//! - [`filters::RlsFilter`], which uses a [recursive least squares] algorithm
+//! - [`filters::LmsFilter`], which uses a [least mean squares] algorithm.
+//! - [`filters::NlmsFilter`], which uses a [normalized least mean squares] algorithm.
+//! - [`filters::RlsFilter`], which uses a [recursive least squares] algorithm.
 //!
 //! [least mean squares]: https://en.wikipedia.org/wiki/Least_mean_squares_filter
 //! [normalized least mean squares]: https://en.wikipedia.org/wiki/Least_mean_squares_filter#Normalized_least_mean_squares_filter_(NLMS)
@@ -21,8 +23,10 @@
 //! trait. An object that implements [`Algorithm`] can be used with [`filters::FilterBase`]
 //! to create a working filter.
 //!
-//! Note that TODO
-//! Support for real-time processing and `no_std` are planned for a future version.
+//! There are also Python bindings available for this crate.
+//! See the [Python package] of the same name.
+//!
+//! [Python package]: https://pypi.org/project/adaptif
 //!
 //! # Usage
 //!
@@ -98,7 +102,7 @@
 //!     window_size: WindowSize::new(16)?,
 //! };
 //!
-//! // Instantiate the filter using SampleFilterBase and our custom algorithm
+//! // Instantiate the filter using FilterBase and our custom algorithm
 //! let mut filter = FilterBase::new(algorithm_cfg, BlockSize::new(1)?);
 //!
 //! // Sample inputs
@@ -106,7 +110,7 @@
 //! let noise_ref = NoiseReference::new(vec![2.0, -1.2, -3.8])?;
 //!
 //! // Adapt the filter using our algorithm's update rules
-//! let _output = filter.adapt(&input_signal, &noise_ref)?;
+//! let output = filter.adapt(&input_signal, &noise_ref)?;
 //!
 //! # Ok::<(), Error>(())
 //! ```

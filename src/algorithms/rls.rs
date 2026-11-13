@@ -19,7 +19,7 @@ pub struct Rls<F: Float> {
     /// Inverse correlation matrix, referred to as P[n], for RLS updates.
     /// Its dimensions are (M, M), where M is the filter's window size.
     inverse_corr_matrix: InverseCorrMatrix<F>,
-    /// Kalman Gain vector used in updating filter coefficients.
+    /// Kalman Gain vector used in updating the filter's weights.
     /// Its length is equal to the filter's window size.
     kalman_gain: KalmanGain<F>,
 }

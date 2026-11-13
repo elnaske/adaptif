@@ -83,6 +83,7 @@ impl<F: Float> DerefMut for NoiseBuffer<F> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+// TODO: docs
 pub struct NoiseWindowView<'a, F: Float> {
     buffer: &'a NoiseBuffer<F>,
     start_idx: usize,

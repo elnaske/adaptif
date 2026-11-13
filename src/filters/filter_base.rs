@@ -1,5 +1,3 @@
-// TODO: module docs
-
 use std::ops::Range;
 
 use crate::algorithms::Algorithm;
@@ -11,8 +9,6 @@ use crate::types::{BlockSize, FilterWeights, Float, NoiseEstimate};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[non_exhaustive]
-// TODO: links to other crate items (types, etc.)
-// TODO: replace references to "filter coefficients" with "weights"
 /// Used as an input parameter to filter types like `LmsFilter` to specify the
 /// filter's processing mode.
 ///
@@ -85,6 +81,10 @@ impl<F: Float, A: Algorithm<F>> FilterBase<F, A> {
     /// Iteratively adapts the filter to the input signal and noise reference
     /// using the chosen algorithm, and returns the denoised signal.
     ///
+    /// Because the filter estimates the noise for each input sample
+    /// from past noise reference samples, the noise reference must be as long
+    /// or longer than the input signal.
+    ///
     /// Since adaptation is performed "on-the-fly", the output signal will start noisy
     /// and become less so over time. In order to fully denoise a signal, call `adapt()`
     /// to adapt the filter offline, then call `filter()` to denoise the signal with fixed
@@ -92,7 +92,6 @@ impl<F: Float, A: Algorithm<F>> FilterBase<F, A> {
     ///
     /// # Errors
     ///
-    /// TODO: why?
     /// Returns an error if the noise reference is shorter than the input signal,
     /// i.e.,`noise_ref.len() < input_signal.len()`.
     pub fn adapt(
@@ -143,9 +142,11 @@ impl<F: Float, A: Algorithm<F>> FilterBase<F, A> {
     /// Applies the filter to the input signal without updating its weights.
     /// This method should be called after adapting the filter to the inputs using `adapt()`.
     ///
+    /// Like with `adapt()`, the noise reference must be at least as long as the
+    /// input signal.
+    ///
     /// # Errors
     ///
-    /// TODO: why?
     /// Returns an error if the noise reference is shorter than the input signal,
     /// i.e.,`noise_ref.len() < input_signal.len()`.
     pub fn filter(
@@ -164,7 +165,7 @@ impl<F: Float, A: Algorithm<F>> FilterBase<F, A> {
     /// # Errors
     ///
     /// Returns an error if the length of the input `Vec` doesn't match
-    /// the number of filter coefficients, i.e. `weights.len() != self.window_size()`.
+    /// the filter's window size, i.e. `weights.len() != self.window_size()`.
     pub fn load_weights(&mut self, weights: Vec<F>) -> Result<()> {
         if weights.len() == self.window_size() {
             self.weights = FilterWeights::try_from(weights)?;
